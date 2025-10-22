@@ -112,14 +112,18 @@ export default function ChatScreen() {
 
         setConversation(conv);
 
-        // If it's a group chat, load all member names and update title
+        // If it's a group chat, load all member names (including current user) and update title
         if (conv.type === "group") {
           const names: { [userId: string]: string } = {};
+          const otherMemberNames: string[] = [];
 
           for (const memberId of conv.members) {
+            const displayName = await getUserDisplayName(memberId);
+            names[memberId] = displayName;
+
+            // Collect other members' names for title
             if (memberId !== firebaseUser?.uid) {
-              const displayName = await getUserDisplayName(memberId);
-              names[memberId] = displayName;
+              otherMemberNames.push(displayName);
             }
           }
 
@@ -128,8 +132,7 @@ export default function ChatScreen() {
           if (conv.groupName) {
             setDisplayTitle(conv.groupName);
           } else {
-            const memberNames = Object.values(names);
-            setDisplayTitle(memberNames.join(", "));
+            setDisplayTitle(otherMemberNames.join(", "));
           }
         } else if (conv.type === "dm") {
           // For DM, get the other user's name
@@ -141,7 +144,7 @@ export default function ChatScreen() {
             setDisplayTitle(displayName);
           }
         }
-        
+
         // Mark conversation as loaded
         setConversationLoaded(true);
       },
@@ -182,7 +185,7 @@ export default function ChatScreen() {
         const enrichedMsgs = msgs.map((msg) => ({
           ...msg,
           senderName:
-            conversation?.type === "group" && msg.senderId !== firebaseUser?.uid
+            conversation?.type === "group"
               ? senderNames[msg.senderId]
               : undefined,
         }));
@@ -202,7 +205,13 @@ export default function ChatScreen() {
     );
 
     return unsubscribe;
-  }, [conversationId, conversationLoaded, conversation?.type, senderNames, firebaseUser?.uid]);
+  }, [
+    conversationId,
+    conversationLoaded,
+    conversation?.type,
+    senderNames,
+    firebaseUser?.uid,
+  ]);
 
   // Mark messages as read when screen is focused
   useEffect(() => {

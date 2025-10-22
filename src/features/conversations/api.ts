@@ -131,8 +131,13 @@ export function subscribeToUserConversations(
             ?.timestamp as Timestamp | undefined;
 
           // Hide conversation if:
-          // 1. User has cleared it AND
-          // 2. There's either no last message OR the last message was before the clear
+          // 1. No messages have been sent yet (no lastMessage field)
+          if (!data.lastMessage) {
+            return null;
+          }
+
+          // 2. User has cleared it AND
+          // 3. There's either no last message OR the last message was before the clear
           if (clearedAt) {
             const clearedTimestamp = (clearedAt as Timestamp).toMillis?.() ?? 0;
             const lastMsgTimestamp =
