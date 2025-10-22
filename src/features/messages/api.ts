@@ -1,0 +1,380 @@
+/**
+ * Messages API
+ * Handles message sending, receiving, pagination, and optimistic UI
+ */
+
+import {
+  firebaseFirestore,
+  firebaseAuth,
+  collection,
+  doc,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  getDoc,
+  getDocs,
+  where,
+} from "../../lib/firebase";
+import type { FieldValue } from "firebase/firestore";
+
+export interface MessageDoc {
+  senderId: string;
+  type: "text" | "image";
+  text?: string;
+  image?: {
+    url: string;
+    thumbnailUrl?: string;
+  };
+  timestamp: Timestamp | FieldValue;
+  status: "sending" | "sent" | "delivered" | "read";
+  // For optimistic UI
+  tempId?: string;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  senderName?: string; // For group chats
+  type: "text" | "image";
+  text?: string;
+  image?: {
+    url: string;
+    thumbnailUrl?: string;
+  };
+  timestamp: Date;
+  status: "sending" | "sent" | "delivered" | "read";
+  // For optimistic UI
+  isOptimistic?: boolean;
+  tempId?: string;
+}
+
+/**
+ * Subscribe to messages in a conversation with pagination
+ * @param conversationId - The conversation ID
+ * @param callback - Callback function to receive messages
+ * @param onError - Error callback
+ * @param messageLimit - Number of messages to load (default: 30)
+ */
+export function subscribeToMessages(
+  conversationId: string,
+  callback: (messages: Message[]) => void,
+  onError: (err: unknown) => void,
+  messageLimit: number = 30
+) {
+  const currentUser = firebaseAuth.currentUser;
+  const currentUserId = currentUser?.uid ?? null;
+
+  const messagesRef = collection(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages"
+  );
+
+  // Base query: newest first with limit; we will client-filter based on clearedAt
+  const q = query(
+    messagesRef,
+    orderBy("timestamp", "desc"),
+    limit(messageLimit)
+  );
+
+  return onSnapshot(
+    q,
+    async (snapshot) => {
+      // Read conversation clearedAt map to filter messages client-side
+      let cutoff: Date | null = null;
+      if (currentUserId) {
+        try {
+          const convSnap = await getDoc(
+            doc(firebaseFirestore, "conversations", conversationId)
+          );
+          if (convSnap.exists()) {
+            const conv = convSnap.data() as {
+              clearedAt?: { [uid: string]: Timestamp };
+            };
+            const raw = conv.clearedAt?.[currentUserId] as
+              | Timestamp
+              | undefined;
+            if (raw && typeof raw.toDate === "function") {
+              cutoff = raw.toDate();
+            }
+          }
+        } catch {}
+      }
+
+      const messages: Message[] = snapshot.docs
+        .map((d) => {
+          const data = d.data() as MessageDoc;
+          const timestampRaw = data.timestamp as Timestamp | unknown;
+          const timestamp =
+            timestampRaw &&
+            typeof (timestampRaw as Timestamp).toDate === "function"
+              ? (timestampRaw as Timestamp).toDate()
+              : new Date();
+
+          return {
+            id: d.id,
+            senderId: data.senderId,
+            type: data.type,
+            text: data.text,
+            image: data.image,
+            timestamp,
+            status: data.status,
+            tempId: data.tempId,
+          };
+        })
+        // Filter out messages older than the user's clearedAt
+        .filter((m) => (cutoff ? m.timestamp > cutoff : true));
+
+      // Reverse to show oldest first (since we query desc)
+      callback(messages.reverse());
+    },
+    onError
+  );
+}
+
+/**
+ * Send a text message with optimistic UI support
+ * @param conversationId - The conversation ID
+ * @param text - The message text
+ * @param tempId - Temporary ID for optimistic UI
+ * @returns The message document ID
+ */
+export async function sendMessage(
+  conversationId: string,
+  text: string,
+  tempId?: string
+): Promise<string> {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) throw new Error("Not authenticated");
+
+  const messageData: MessageDoc = {
+    senderId: currentUser.uid,
+    type: "text",
+    text: text.trim(),
+    timestamp: serverTimestamp(),
+    status: "sent",
+    ...(tempId && { tempId }),
+  };
+
+  const messagesRef = collection(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages"
+  );
+
+  const docRef = await addDoc(messagesRef, messageData);
+
+  // Update conversation's lastMessage and updatedAt
+  const conversationRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId
+  );
+  await updateDoc(conversationRef, {
+    lastMessage: {
+      text: text.trim(),
+      senderId: currentUser.uid,
+      timestamp: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+/**
+ * Send an image message with optimistic UI support
+ * @param conversationId - The conversation ID
+ * @param imageUrl - The uploaded image URL
+ * @param thumbnailUrl - The thumbnail URL (optional, will be generated by Cloud Function)
+ * @param tempId - Temporary ID for optimistic UI
+ * @returns The message document ID
+ */
+export async function sendImageMessage(
+  conversationId: string,
+  imageUrl: string,
+  thumbnailUrl?: string,
+  tempId?: string
+): Promise<string> {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) throw new Error("Not authenticated");
+
+  const messageData: MessageDoc = {
+    senderId: currentUser.uid,
+    type: "image",
+    image: {
+      url: imageUrl,
+      ...(thumbnailUrl && { thumbnailUrl }),
+    },
+    timestamp: serverTimestamp(),
+    status: "sent",
+    ...(tempId && { tempId }),
+  };
+
+  const messagesRef = collection(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages"
+  );
+
+  const docRef = await addDoc(messagesRef, messageData);
+
+  // Update conversation's lastMessage and updatedAt
+  const conversationRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId
+  );
+  await updateDoc(conversationRef, {
+    lastMessage: {
+      text: "📷 Image",
+      senderId: currentUser.uid,
+      timestamp: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+/**
+ * Update message status (for delivery/read receipts)
+ * @param conversationId - The conversation ID
+ * @param messageId - The message ID
+ * @param status - The new status
+ */
+export async function updateMessageStatus(
+  conversationId: string,
+  messageId: string,
+  status: "sent" | "delivered" | "read"
+): Promise<void> {
+  const messageRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages",
+    messageId
+  );
+
+  await updateDoc(messageRef, {
+    status,
+  });
+}
+
+/**
+ * Get a single message by ID
+ * @param conversationId - The conversation ID
+ * @param messageId - The message ID
+ * @returns The message or null if not found
+ */
+export async function getMessage(
+  conversationId: string,
+  messageId: string
+): Promise<Message | null> {
+  const messageRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages",
+    messageId
+  );
+
+  const messageSnap = await getDoc(messageRef);
+  if (!messageSnap.exists()) return null;
+
+  const data = messageSnap.data() as MessageDoc;
+  const timestampRaw = data.timestamp as Timestamp | unknown;
+  const timestamp =
+    timestampRaw && typeof (timestampRaw as Timestamp).toDate === "function"
+      ? (timestampRaw as Timestamp).toDate()
+      : new Date();
+
+  return {
+    id: messageSnap.id,
+    senderId: data.senderId,
+    type: data.type,
+    text: data.text,
+    image: data.image,
+    timestamp,
+    status: data.status,
+    tempId: data.tempId,
+  };
+}
+
+/**
+ * Mark messages as delivered for the current user
+ * Updates all messages in a conversation that were sent by others and not yet delivered
+ * @param conversationId - The conversation ID
+ */
+export async function markMessagesAsDelivered(
+  conversationId: string
+): Promise<void> {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) return;
+
+  const messagesRef = collection(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages"
+  );
+
+  const q = query(
+    messagesRef,
+    where("senderId", "!=", currentUser.uid),
+    where("status", "==", "sent")
+  );
+
+  try {
+    const snapshot = await getDocs(q);
+    const updatePromises = snapshot.docs.map((doc) =>
+      updateDoc(doc.ref, { status: "delivered" })
+    );
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error("Error marking messages as delivered:", error);
+  }
+}
+
+/**
+ * Mark messages as read for the current user
+ * Updates all messages in a conversation that were sent by others
+ * @param conversationId - The conversation ID
+ */
+export async function markMessagesAsRead(
+  conversationId: string
+): Promise<void> {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) return;
+
+  const messagesRef = collection(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "messages"
+  );
+
+  const q = query(
+    messagesRef,
+    where("senderId", "!=", currentUser.uid),
+    where("status", "in", ["sent", "delivered"])
+  );
+
+  try {
+    const snapshot = await getDocs(q);
+    const updatePromises = snapshot.docs.map((doc) =>
+      updateDoc(doc.ref, { status: "read" })
+    );
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+  }
+}

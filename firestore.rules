@@ -1,0 +1,112 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isMember(conversationData) {
+      return request.auth.uid in conversationData.members;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Anyone authenticated can read user profiles
+      allow read: if isAuthenticated();
+      
+      // Users can only create/update their own profile with strict invariants:
+      // - Document ID must equal auth.uid
+      // - email must equal auth.token.email
+      // - email/emailLower are immutable after creation (validated without lower())
+      // - email/emailLower are immutable after creation
+      allow create: if isAuthenticated() && isOwner(userId)
+        && request.resource.id == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      
+      // Updates allowed only by owner; email and emailLower must remain unchanged
+      // Note: presence (online/offline) is tracked in Realtime Database, not Firestore
+      allow update: if isAuthenticated() && isOwner(userId)
+        && request.resource.id == request.auth.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.emailLower == resource.data.emailLower
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['displayName','photoURL']);
+      
+      // Users cannot delete their own profile (admin only)
+      allow delete: if false;
+    }
+    
+    // Conversations collection
+    match /conversations/{conversationId} {
+      // Users can read conversations they're members of
+      allow read: if isAuthenticated() && isMember(resource.data);
+      
+      // Users can create conversations if they include themselves in members
+      // For DMs, allow writing dmKey and clearedAt map
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.members
+        && request.resource.data.diff({}).changedKeys().hasOnly([
+          'members','type','dmKey','updatedAt','groupName','clearedAt','lastMessage'
+        ]);
+      
+      // Only members can update conversation
+      // Restrict updates to expected fields
+      allow update: if isAuthenticated() && isMember(resource.data)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'lastMessage','updatedAt','groupName','members','clearedAt'
+        ]);
+      
+      // Members can delete conversations
+      allow delete: if isAuthenticated() && isMember(resource.data);
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Members of the conversation can read messages
+        allow read: if isAuthenticated() && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+        
+        // Members can create messages
+        allow create: if isAuthenticated() 
+          && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data)
+          && request.resource.data.senderId == request.auth.uid;
+        
+        // Sender can update their own messages, OR
+        // Any other member can update ONLY the 'status' field
+        allow update: if isAuthenticated()
+          && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data)
+          && (
+            // Sender can update anything on their own message
+            request.resource.data.senderId == request.auth.uid
+            || (
+              // Non-senders: only 'status' may change
+              request.auth.uid != resource.data.senderId
+              && resource.data.diff(request.resource.data).changedKeys().hasOnly(['status'])
+            )
+          );
+        
+        // Sender can delete their own messages
+        allow delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+      }
+    }
+    
+    // Receipts collection (for read receipts)
+    match /receipts/{receiptId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Default: deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+
+
+
+

@@ -1,0 +1,11 @@
+# Assets Folder
+
+This folder should contain:
+- icon.png (1024x1024px app icon)
+- splash.png (splash screen image)
+- adaptive-icon.png (Android adaptive icon)
+- favicon.png (web favicon)
+
+These will be added as part of the design finalization.
+For now, Expo will use default placeholder assets.
+
