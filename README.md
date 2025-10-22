@@ -213,16 +213,16 @@ This project follows a structured PR-based development approach:
 - ✅ **PR #2** — Firebase Wiring
 - ✅ **PR #3** — Authentication
 - ✅ **PR #4** — Conversations
-- ⏳ **PR #5** — Messaging Core + Optimistic UI
-- ⏳ **PR #6** — Presence & Typing
-- ⏳ **PR #7** — Delivery States + Read Receipts
+- ✅ **PR #5** — Messaging Core + Optimistic UI
+- ✅ **PR #6** — Presence & Typing
+- ✅ **PR #7** — Delivery States + Read Receipts
 - ⏳ **PR #8** — Image Messaging
 - ⏳ **PR #9** — User Profiles + Avatars
-- ⏳ **PR #10** — Group Chats
-- ⏳ **PR #11** — In-App Notifications
-- ⏳ **PR #12** — Persistence Hardening
-- ⏳ **PR #13** — Testing & CI Verification
-- ⏳ **PR #14** — Emulator Runbook + Final QA
+- ✅ **PR #10** — Group Chats
+- ✅ **PR #11** — In-App Notifications
+- ✅ **PR #12** — Persistence Hardening
+- ✅ **PR #13** — Testing & CI Verification
+- ✅ **PR #14** — Emulator Runbook + Final QA
 
 ## 🎨 Design System
 
