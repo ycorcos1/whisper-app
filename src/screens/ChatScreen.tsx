@@ -43,8 +43,6 @@ import {
   saveDraft,
   getDraft,
   clearDraft,
-  saveScrollPosition,
-  getScrollPosition,
   saveSelectedConversation,
   cacheMessages,
   getCachedMessages,
@@ -207,6 +205,11 @@ export default function ChatScreen() {
           } else {
             setDisplayTitle(otherMemberNames.join(", "));
           }
+
+          // If we have cached messages and loading is still true, show them now
+          if (loading && serverMessages.length > 0) {
+            setLoading(false);
+          }
         } else if (conv.type === "dm") {
           // For DM, get the other user's name, ID, and photo
           const otherMemberId = conv.members.find(
@@ -249,7 +252,7 @@ export default function ChatScreen() {
     );
 
     return unsubscribe;
-  }, [conversationId, firebaseUser?.uid]);
+  }, [conversationId, firebaseUser?.uid, loading, serverMessages.length]);
 
   // Load cached messages and draft on mount
   useEffect(() => {
@@ -263,7 +266,12 @@ export default function ChatScreen() {
           timestamp: new Date(msg.timestamp), // Convert number back to Date
         }));
         setServerMessages(cachedMessages);
-        setLoading(false); // Show cached messages immediately
+        // For group chats, wait for conversation to load (to get member names)
+        // For DMs, show cached messages immediately
+        if (conversation?.type !== "group") {
+          setLoading(false);
+        }
+        // Group chats will set loading=false after conversation loads
       }
 
       // Load draft
@@ -276,7 +284,7 @@ export default function ChatScreen() {
       saveSelectedConversation(conversationId);
     };
     loadCachedData();
-  }, [conversationId]);
+  }, [conversationId, conversation?.type]);
 
   // Subscribe to messages (wait for conversation to load first for group chats)
   useEffect(() => {
@@ -371,25 +379,16 @@ export default function ChatScreen() {
     conversation?.type,
   ]);
 
-  // Restore scroll position
+  // Scroll to bottom on initial load
   useEffect(() => {
     if (!loading && messages.length > 0 && !initialScrollDone) {
-      const restoreScroll = async () => {
-        const savedPosition = await getScrollPosition(conversationId);
-        if (savedPosition !== null && flatListRef.current) {
-          // Scroll to saved position after a short delay to ensure list is rendered
-          setTimeout(() => {
-            flatListRef.current?.scrollToOffset({
-              offset: savedPosition,
-              animated: false,
-            });
-          }, 100);
-        }
+      // Scroll to bottom after messages load
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
         setInitialScrollDone(true);
-      };
-      restoreScroll();
+      }, 100);
     }
-  }, [loading, messages.length, conversationId, initialScrollDone]);
+  }, [loading, messages.length, initialScrollDone]);
 
   // Save draft when text changes (debounced)
   useEffect(() => {
@@ -634,13 +633,6 @@ export default function ChatScreen() {
     });
   };
 
-  const handleScroll = (event: {
-    nativeEvent: { contentOffset: { y: number } };
-  }) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    saveScrollPosition(conversationId, offsetY);
-  };
-
   const renderMessage = ({ item }: { item: Message }) => {
     const isOwn = item.senderId === firebaseUser?.uid;
     const optimisticMsg = item as Message & {
@@ -711,8 +703,6 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
-            onScroll={handleScroll}
-            scrollEventThrottle={400}
             maintainVisibleContentPosition={{
               minIndexForVisible: 0,
               autoscrollToTopThreshold: 10,

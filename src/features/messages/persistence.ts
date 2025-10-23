@@ -12,11 +12,11 @@ export const APP_STATE_SCHEMA_VERSION = 1;
 const KEYS = {
   SCHEMA_VERSION: "@whisper:schema_version",
   DRAFTS: "@whisper:drafts",
-  SCROLL_POSITIONS: "@whisper:scroll_positions",
   OUTBOUND_QUEUE: "@whisper:outbound_queue",
   SELECTED_CONVERSATION: "@whisper:selected_conversation",
   THEME_PREFS: "@whisper:theme_prefs",
   MESSAGE_CACHE: "@whisper:message_cache",
+  DISPLAY_NAME_CACHE: "@whisper:display_name_cache",
 };
 
 export interface QueuedMessage {
@@ -133,41 +133,6 @@ export async function clearDraft(conversationId: string): Promise<void> {
 }
 
 /**
- * Scroll Position Management
- */
-
-export async function saveScrollPosition(
-  conversationId: string,
-  position: number
-): Promise<void> {
-  try {
-    const positionsJson = await AsyncStorage.getItem(KEYS.SCROLL_POSITIONS);
-    const positions = positionsJson ? JSON.parse(positionsJson) : {};
-    positions[conversationId] = position;
-    await AsyncStorage.setItem(
-      KEYS.SCROLL_POSITIONS,
-      JSON.stringify(positions)
-    );
-  } catch (error) {
-    console.error("Error saving scroll position:", error);
-  }
-}
-
-export async function getScrollPosition(
-  conversationId: string
-): Promise<number | null> {
-  try {
-    const positionsJson = await AsyncStorage.getItem(KEYS.SCROLL_POSITIONS);
-    if (!positionsJson) return null;
-    const positions = JSON.parse(positionsJson);
-    return positions[conversationId] || null;
-  } catch (error) {
-    console.error("Error getting scroll position:", error);
-    return null;
-  }
-}
-
-/**
  * Outbound Queue Management (for offline support)
  */
 
@@ -272,10 +237,10 @@ export async function clearAllCachesExceptPrefs(): Promise<void> {
   try {
     await AsyncStorage.multiRemove([
       KEYS.DRAFTS,
-      KEYS.SCROLL_POSITIONS,
       KEYS.OUTBOUND_QUEUE,
       KEYS.SELECTED_CONVERSATION,
       KEYS.MESSAGE_CACHE,
+      KEYS.DISPLAY_NAME_CACHE,
     ]);
     console.log("Cleared all caches except theme preferences");
   } catch (error) {
@@ -415,5 +380,97 @@ export async function clearAllMessageCaches(): Promise<void> {
     console.log("Cleared all message caches");
   } catch (error) {
     console.error("Error clearing all message caches:", error);
+  }
+}
+
+/**
+ * Display Name Cache Management
+ */
+
+export interface DisplayNameCache {
+  [userId: string]: {
+    displayName: string;
+    cachedAt: number;
+  };
+}
+
+/**
+ * Cache a user's display name
+ */
+export async function cacheDisplayName(
+  userId: string,
+  displayName: string
+): Promise<void> {
+  try {
+    const cacheJson = await AsyncStorage.getItem(KEYS.DISPLAY_NAME_CACHE);
+    const cache: DisplayNameCache = cacheJson ? JSON.parse(cacheJson) : {};
+
+    cache[userId] = {
+      displayName,
+      cachedAt: Date.now(),
+    };
+
+    await AsyncStorage.setItem(KEYS.DISPLAY_NAME_CACHE, JSON.stringify(cache));
+  } catch (error) {
+    console.error("Error caching display name:", error);
+  }
+}
+
+/**
+ * Get a cached display name
+ */
+export async function getCachedDisplayName(
+  userId: string
+): Promise<string | null> {
+  try {
+    const cacheJson = await AsyncStorage.getItem(KEYS.DISPLAY_NAME_CACHE);
+    if (!cacheJson) return null;
+
+    const cache: DisplayNameCache = JSON.parse(cacheJson);
+    const userCache = cache[userId];
+
+    if (!userCache) return null;
+
+    // Check if cache is expired (7 days)
+    const cacheAge = Date.now() - userCache.cachedAt;
+    const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    if (cacheAge > CACHE_EXPIRY) {
+      // Remove expired cache
+      delete cache[userId];
+      await AsyncStorage.setItem(
+        KEYS.DISPLAY_NAME_CACHE,
+        JSON.stringify(cache)
+      );
+      return null;
+    }
+
+    return userCache.displayName;
+  } catch (error) {
+    console.error("Error getting cached display name:", error);
+    return null;
+  }
+}
+
+/**
+ * Clear cached display name for a user (useful when user updates their profile)
+ */
+export async function clearDisplayNameCache(userId?: string): Promise<void> {
+  try {
+    if (userId) {
+      const cacheJson = await AsyncStorage.getItem(KEYS.DISPLAY_NAME_CACHE);
+      if (!cacheJson) return;
+
+      const cache: DisplayNameCache = JSON.parse(cacheJson);
+      delete cache[userId];
+      await AsyncStorage.setItem(
+        KEYS.DISPLAY_NAME_CACHE,
+        JSON.stringify(cache)
+      );
+    } else {
+      await AsyncStorage.removeItem(KEYS.DISPLAY_NAME_CACHE);
+    }
+  } catch (error) {
+    console.error("Error clearing display name cache:", error);
   }
 }

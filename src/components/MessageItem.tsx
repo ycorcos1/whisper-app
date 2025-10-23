@@ -202,26 +202,12 @@ export function MessageItem({
 }
 
 function formatTime(date: Date): string {
-  const now = new Date();
-  const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
-
-  if (isToday) {
-    // Show time only for today's messages
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } else {
-    // Show date for older messages
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  }
+  // Always show time in hh:mm format
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false, // 24-hour format (hh:mm)
+  });
 }
 
 const styles = StyleSheet.create({

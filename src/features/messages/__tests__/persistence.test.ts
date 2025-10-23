@@ -16,8 +16,6 @@ import {
   saveDraft,
   getDraft,
   clearDraft,
-  saveScrollPosition,
-  getScrollPosition,
   saveSelectedConversation,
   getSelectedConversation,
   saveThemePreferences,
@@ -297,33 +295,6 @@ describe("Persistence - Drafts", () => {
   });
 });
 
-describe("Persistence - Scroll Position", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("should save scroll position", async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
-
-    await saveScrollPosition("conv_1", 100);
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      "@whisper:scroll_positions",
-      JSON.stringify({ conv_1: 100 })
-    );
-  });
-
-  it("should get scroll position", async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(
-      JSON.stringify({ conv_1: 100 })
-    );
-
-    const position = await getScrollPosition("conv_1");
-
-    expect(position).toBe(100);
-  });
-});
-
 describe("Persistence - Selected Conversation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -385,7 +356,6 @@ describe("Persistence - Logout Hygiene", () => {
 
     expect(AsyncStorage.multiRemove).toHaveBeenCalledWith([
       "@whisper:drafts",
-      "@whisper:scroll_positions",
       "@whisper:outbound_queue",
       "@whisper:selected_conversation",
     ]);

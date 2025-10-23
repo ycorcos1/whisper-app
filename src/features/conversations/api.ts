@@ -17,6 +17,11 @@ import {
 } from "../../lib/firebase";
 import { firebaseAuth } from "../../lib/firebase";
 import type { FieldValue } from "firebase/firestore";
+import {
+  getCachedDisplayName,
+  cacheDisplayName,
+  clearDisplayNameCache as clearPersistedDisplayNameCache,
+} from "../messages/persistence";
 
 export interface ConversationDoc {
   members: string[];
@@ -360,7 +365,24 @@ export function subscribeToConversation(
   );
 }
 
+// In-memory cache for user display names (for instant access within a session)
+const displayNameCache = new Map<string, string>();
+
 export async function getUserDisplayName(userId: string): Promise<string> {
+  // Check in-memory cache first (fastest)
+  if (displayNameCache.has(userId)) {
+    return displayNameCache.get(userId)!;
+  }
+
+  // Check persistent cache (AsyncStorage)
+  const cached = await getCachedDisplayName(userId);
+  if (cached) {
+    // Store in memory cache for faster subsequent access
+    displayNameCache.set(userId, cached);
+    return cached;
+  }
+
+  // Fetch from Firestore
   try {
     const userDoc = await getDoc(doc(firebaseFirestore, "users", userId));
     if (userDoc.exists()) {
@@ -368,11 +390,37 @@ export async function getUserDisplayName(userId: string): Promise<string> {
         displayName?: string;
         email?: string;
       };
-      return userData.displayName ?? userData.email ?? userId;
+      const displayName = userData.displayName ?? userData.email ?? userId;
+
+      // Cache in both memory and persistent storage
+      displayNameCache.set(userId, displayName);
+      await cacheDisplayName(userId, displayName);
+
+      return displayName;
     }
+
+    // Cache the fallback
+    displayNameCache.set(userId, userId);
+    await cacheDisplayName(userId, userId);
     return userId;
   } catch {
+    // Cache the fallback
+    displayNameCache.set(userId, userId);
+    await cacheDisplayName(userId, userId);
     return userId;
+  }
+}
+
+/**
+ * Clear cached display name for a user (useful when user updates their profile)
+ */
+export async function clearUserDisplayNameCache(userId?: string) {
+  if (userId) {
+    displayNameCache.delete(userId);
+    await clearPersistedDisplayNameCache(userId);
+  } else {
+    displayNameCache.clear();
+    await clearPersistedDisplayNameCache();
   }
 }
 

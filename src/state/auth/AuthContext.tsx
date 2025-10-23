@@ -24,6 +24,7 @@ import {
 } from "../../lib/firebase";
 import { User, SignupData, LoginData } from "../../types/user";
 import { clearAllCachesExceptPrefs } from "../../features/messages/persistence";
+import { clearUserDisplayNameCache } from "../../features/conversations/api";
 
 export interface AuthContextType {
   user: User | null;
@@ -178,6 +179,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await updateDoc(userRef, {
         displayName: trimmedName,
       });
+
+      // Clear cached display name so it gets refreshed everywhere
+      await clearUserDisplayNameCache(firebaseUser.uid);
 
       // Real-time subscription will update the user state automatically
     } catch (err: any) {
