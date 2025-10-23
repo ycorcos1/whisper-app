@@ -26,6 +26,8 @@ export interface ConversationDoc {
   dmKey?: string;
   // Per-user clear semantics: map of userId -> Timestamp when they cleared
   clearedAt?: { [userId: string]: Timestamp | FieldValue };
+  // Per-user last read timestamp: map of userId -> Timestamp when they last read
+  lastReadAt?: { [userId: string]: Timestamp | FieldValue };
   lastMessage?: {
     text: string;
     senderId: string;
@@ -41,6 +43,15 @@ export interface ConversationListItem {
   updatedAt: Date;
   lastMessageTimestamp?: Date; // Timestamp of the last message (for notification filtering)
   otherUserId?: string; // For DM conversations, the other user's ID (for presence)
+  otherUserPhotoURL?: string | null; // For DM conversations, the other user's avatar
+  hasUnread?: boolean; // True if there are unread messages for the current user
+  type: "dm" | "group"; // Conversation type
+  members?: Array<{
+    // For group chats, member info for avatar display
+    userId: string;
+    displayName: string;
+    photoURL?: string | null;
+  }>;
 }
 
 export function subscribeToUserConversations(
@@ -63,12 +74,20 @@ export function subscribeToUserConversations(
   return onSnapshot(
     q,
     async (snapshot) => {
-      const items: ConversationListItem[] = await Promise.all(
+      const items: (ConversationListItem | null)[] = await Promise.all(
         snapshot.docs.map(async (d) => {
           const data = d.data() as ConversationDoc;
 
           let name: string;
           let otherUserId: string | undefined;
+          let otherUserPhotoURL: string | null | undefined;
+          let members:
+            | Array<{
+                userId: string;
+                displayName: string;
+                photoURL?: string | null;
+              }>
+            | undefined;
 
           if (data.type === "group") {
             // For group chats, use groupName if it exists, otherwise show member names
@@ -100,14 +119,53 @@ export function subscribeToUserConversations(
               name = memberNames.join(", ");
             }
             otherUserId = undefined; // No presence badge for groups
+
+            // Fetch member info for group avatar (up to 4 members)
+            const membersToFetch = data.members
+              .filter((m) => m !== currentUser.uid)
+              .slice(0, 4);
+
+            members = await Promise.all(
+              membersToFetch.map(async (memberId) => {
+                try {
+                  const memberDoc = await getDoc(
+                    doc(firebaseFirestore, "users", memberId)
+                  );
+                  if (memberDoc.exists()) {
+                    const u = memberDoc.data() as {
+                      displayName?: string;
+                      email?: string;
+                      photoURL?: string | null;
+                    };
+                    return {
+                      userId: memberId,
+                      displayName: u.displayName ?? u.email ?? memberId,
+                      photoURL: u.photoURL,
+                    };
+                  }
+                  return {
+                    userId: memberId,
+                    displayName: memberId,
+                    photoURL: null,
+                  };
+                } catch {
+                  return {
+                    userId: memberId,
+                    displayName: memberId,
+                    photoURL: null,
+                  };
+                }
+              })
+            );
           } else {
             // For DM, show the other user's name
             const otherMember =
               data.members.find((m) => m !== currentUser.uid) ??
               currentUser.uid;
 
-            // Default name is UID; try to resolve displayName from users/{uid}
+            // Default name is UID; try to resolve displayName and photoURL from users/{uid}
             name = otherMember;
+            otherUserPhotoURL = null;
             try {
               const otherDoc = await getDoc(
                 doc(firebaseFirestore, "users", otherMember)
@@ -116,8 +174,10 @@ export function subscribeToUserConversations(
                 const u = otherDoc.data() as {
                   displayName?: string;
                   email?: string;
+                  photoURL?: string | null;
                 };
                 name = u.displayName ?? u.email ?? otherMember;
+                otherUserPhotoURL = u.photoURL || null;
               }
             } catch {
               // ignore lookup errors; keep UID as fallback
@@ -165,6 +225,26 @@ export function subscribeToUserConversations(
               ? lastMessageTimestampRaw.toDate()
               : undefined;
 
+          // Calculate unread status
+          let hasUnread = false;
+          if (data.lastMessage) {
+            const lastReadAtRaw = data.lastReadAt?.[currentUser.uid] as
+              | Timestamp
+              | undefined;
+            const lastReadAtMillis = lastReadAtRaw?.toMillis?.() ?? 0;
+            const lastMessageMillis =
+              lastMessageTimestampRaw?.toMillis?.() ?? 0;
+
+            // Has unread if:
+            // 1. There's a last message
+            // 2. User hasn't read it yet (no lastReadAt OR lastMessage is newer than lastReadAt)
+            // 3. The message is not sent by the current user
+            hasUnread =
+              lastMessageMillis > 0 &&
+              lastMessageMillis > lastReadAtMillis &&
+              data.lastMessage.senderId !== currentUser.uid;
+          }
+
           return {
             id: d.id,
             name,
@@ -172,6 +252,10 @@ export function subscribeToUserConversations(
             updatedAt,
             lastMessageTimestamp,
             otherUserId,
+            otherUserPhotoURL,
+            hasUnread,
+            type: data.type,
+            members,
           };
         })
       );
@@ -432,4 +516,22 @@ export async function getUserByEmail(
     console.error("Error getting user by email:", error);
     return null;
   }
+}
+
+/**
+ * Mark a conversation as read for the current user.
+ * Sets lastReadAt[currentUid] to server time, which will clear the unread indicator.
+ */
+export async function markConversationAsRead(conversationId: string) {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) throw new Error("Not authenticated");
+
+  const conversationRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId
+  );
+  await updateDoc(conversationRef, {
+    [`lastReadAt.${currentUser.uid}`]: serverTimestamp(),
+  } as any);
 }

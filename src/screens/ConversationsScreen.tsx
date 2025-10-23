@@ -3,16 +3,17 @@
  * List of all user conversations with floating "+" button
  */
 
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Animated,
 } from "react-native";
-import { Swipeable } from "react-native-gesture-handler";
 import { useNavigation } from "@react-navigation/native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { theme } from "../theme";
 import {
   subscribeToUserConversations,
@@ -20,6 +21,8 @@ import {
   clearConversationForCurrentUser,
 } from "../features/conversations/api";
 import { PresenceBadge } from "../components/PresenceBadge";
+import { Avatar } from "../components/Avatar";
+import { GroupAvatar } from "../components/GroupAvatar";
 
 // Firestore-backed conversations
 
@@ -28,11 +31,45 @@ export default function ConversationsScreen() {
   const [items, setItems] = useState<ConversationListItem[]>([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [agentPanelVisible, setAgentPanelVisible] = useState(false);
+  const [panelHeight] = useState(new Animated.Value(0));
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToUserConversations(setItems, console.error);
     return unsubscribe;
   }, []);
+
+  const toggleAgentPanel = () => {
+    // Stop any ongoing animation
+    if (animationRef.current) {
+      animationRef.current.stop();
+    }
+
+    const newVisibleState = !agentPanelVisible;
+    const toValue = newVisibleState ? 200 : 0;
+
+    // Update state immediately
+    setAgentPanelVisible(newVisibleState);
+
+    // Start animation
+    animationRef.current = Animated.spring(panelHeight, {
+      toValue,
+      useNativeDriver: false,
+      damping: 20,
+      mass: 0.8,
+      stiffness: 120,
+      overshootClamping: false,
+      restDisplacementThreshold: 0.01,
+      restSpeedThreshold: 0.01,
+    });
+
+    animationRef.current.start(({ finished }) => {
+      if (finished) {
+        animationRef.current = null;
+      }
+    });
+  };
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -53,18 +90,10 @@ export default function ConversationsScreen() {
   useLayoutEffect(() => {
     navigation.setOptions?.({
       headerTitle: "Conversations",
-      headerRight: () => (
-        <View style={{ flexDirection: "row" }}>
-          {selectMode && selectedIds.size > 0 && (
-            <TouchableOpacity
-              onPress={handleBulkDelete}
-              style={{ paddingHorizontal: 12 }}
-            >
-              <Text style={{ color: theme.colors.error, fontWeight: "600" }}>
-                Delete
-              </Text>
-            </TouchableOpacity>
-          )}
+      headerLeft: () => (
+        <View
+          style={{ flexDirection: "row", alignItems: "center", marginLeft: 12 }}
+        >
           <TouchableOpacity
             onPress={() => {
               if (selectMode) {
@@ -82,19 +111,32 @@ export default function ConversationsScreen() {
               {selectMode ? "Done" : "Select"}
             </Text>
           </TouchableOpacity>
+          {selectMode && selectedIds.size > 0 && (
+            <TouchableOpacity
+              onPress={handleBulkDelete}
+              style={{ paddingHorizontal: 12 }}
+            >
+              <Text style={{ color: theme.colors.error, fontWeight: "600" }}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
+      ),
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate("NewChat")}
+          style={{ paddingHorizontal: 16 }}
+        >
+          <MaterialCommunityIcons
+            name="pencil-box-outline"
+            size={26}
+            color={theme.colors.amethystGlow}
+          />
+        </TouchableOpacity>
       ),
     });
   }, [navigation, selectMode, selectedIds.size]);
-
-  const renderRightActions = (id: string) => (
-    <TouchableOpacity
-      onPress={() => clearConversationForCurrentUser(id)}
-      style={styles.swipeDelete}
-    >
-      <Text style={styles.swipeDeleteText}>🗑️</Text>
-    </TouchableOpacity>
-  );
 
   const renderConversation = ({ item }: { item: ConversationListItem }) => {
     const isSelected = selectedIds.has(item.id);
@@ -127,13 +169,24 @@ export default function ConversationsScreen() {
           </View>
         )}
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.name[0]}</Text>
-          </View>
-          {item.otherUserId && (
-            <View style={styles.presenceBadgeContainer}>
-              <PresenceBadge userId={item.otherUserId} size="small" />
-            </View>
+          {item.type === "group" && item.members && item.members.length > 0 ? (
+            <GroupAvatar members={item.members} size="medium" />
+          ) : (
+            <>
+              <Avatar
+                photoURL={item.otherUserPhotoURL}
+                displayName={item.name}
+                userId={item.otherUserId || item.id}
+                size="medium"
+                showOnline={!!item.otherUserId}
+                isOnline={false} // Presence will be handled by PresenceBadge
+              />
+              {item.otherUserId && (
+                <View style={styles.presenceBadgeContainer}>
+                  <PresenceBadge userId={item.otherUserId} size="small" />
+                </View>
+              )}
+            </>
           )}
         </View>
         <View style={styles.conversationContent}>
@@ -146,20 +199,17 @@ export default function ConversationsScreen() {
               })}
             </Text>
           </View>
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessageText}
-          </Text>
+          <View style={styles.lastMessageRow}>
+            <Text style={styles.lastMessage} numberOfLines={1}>
+              {item.lastMessageText}
+            </Text>
+            {item.hasUnread && <View style={styles.unreadDot} />}
+          </View>
         </View>
       </TouchableOpacity>
     );
 
-    return selectMode ? (
-      content
-    ) : (
-      <Swipeable renderRightActions={() => renderRightActions(item.id)}>
-        {content}
-      </Swipeable>
-    );
+    return content;
   };
 
   return (
@@ -179,12 +229,44 @@ export default function ConversationsScreen() {
         />
       )}
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate("NewChat")}
-      >
-        <Text style={styles.fabIcon}>+</Text>
+      <TouchableOpacity style={styles.fab} onPress={toggleAgentPanel}>
+        <MaterialCommunityIcons name="ghost" size={28} color="#FFFFFF" />
       </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          styles.agentPanel,
+          {
+            height: panelHeight,
+          },
+        ]}
+        pointerEvents={agentPanelVisible ? "auto" : "none"}
+      >
+        <View style={styles.agentPanelHeader}>
+          <View style={styles.agentPanelTitleContainer}>
+            <MaterialCommunityIcons
+              name="ghost"
+              size={24}
+              color={theme.colors.amethystGlow}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.agentPanelTitle}>Casper</Text>
+          </View>
+          <TouchableOpacity
+            onPress={toggleAgentPanel}
+            style={styles.closeButton}
+          >
+            <MaterialCommunityIcons
+              name="chevron-down"
+              size={24}
+              color={theme.colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.agentPanelContent}>
+          <Text style={styles.agentPanelSubtext}>Coming soon...</Text>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -257,9 +339,22 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
   },
+  lastMessageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   lastMessage: {
+    flex: 1,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.amethystGlow,
+    flexShrink: 0,
   },
   unreadBadge: {
     backgroundColor: theme.colors.amethystGlow,
@@ -274,16 +369,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.bold,
     color: "#FFFFFF",
-  },
-  swipeDelete: {
-    backgroundColor: theme.colors.error,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 72,
-  },
-  swipeDeleteText: {
-    color: "#FFFFFF",
-    fontSize: 24,
   },
   fab: {
     position: "absolute",
@@ -322,5 +407,48 @@ const styles = StyleSheet.create({
   },
   conversationItemSelected: {
     backgroundColor: theme.colors.surface,
+  },
+  agentPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+    overflow: "hidden",
+    ...theme.shadows.lg,
+  },
+  agentPanelHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  agentPanelTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  agentPanelTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text,
+  },
+  closeButton: {
+    padding: theme.spacing.xs,
+  },
+  agentPanelContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: theme.spacing.xl,
+  },
+  agentPanelSubtext: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
   },
 });

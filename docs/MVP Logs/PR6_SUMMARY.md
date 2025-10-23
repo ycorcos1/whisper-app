@@ -67,6 +67,28 @@ Implemented real-time presence tracking and typing indicators using Firebase Rea
 - Positioned above message composer
 - Auto-hides when no one is typing
 
+#### Unified Status Label (Header)
+
+**Location:** `ChatScreen.tsx` header
+
+- Shows under user's display name in DM conversations
+- Three states: "Online", "Offline", or "typing..."
+- Typing status temporarily overrides online/offline
+- Real-time updates via `useUserPresence` and `useTypingIndicator`
+- Italicized text, centered alignment
+- **DM-only:** Only visible for DM conversations (hidden in group chats)
+- Lightweight implementation with minimal re-renders
+
+#### Typing Indicator (Message Area)
+
+**Location:** Above message composer in `ChatScreen.tsx`
+
+- Animated three-dot indicator
+- Shows user name when typing
+- **DM-only:** Only appears in direct message conversations
+- Hidden in group chats for cleaner UI
+- Real-time synchronization via RTDB
+
 ---
 
 ## Integration Points
@@ -79,11 +101,15 @@ Implemented real-time presence tracking and typing indicators using Firebase Rea
 
 ### ChatScreen.tsx
 
-- Integrated `useTypingIndicator` hook
+- Integrated `useTypingIndicator` and `useUserPresence` hooks
+- Custom header component with unified presence label
+- Shows "Online", "Offline", or "typing..." status under user's name in header
+- Typing status overrides online/offline state in header
 - Triggers typing status on text input change
 - Clears typing status on message send
-- Displays `TypingIndicator` component above composer
+- Displays `TypingIndicator` component above composer when other users are typing
 - Connected typing detection to input field
+- Tracks other user's ID for DM conversations
 
 ### ConversationsScreen.tsx
 
@@ -293,4 +319,3 @@ const handleAppStateChange = (nextAppState: AppStateStatus) => {
 
 **Approved for merge:** October 21, 2025  
 **Ready for:** PR #7 (Delivery States + Read Receipts)
-

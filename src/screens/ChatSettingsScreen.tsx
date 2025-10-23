@@ -13,6 +13,8 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  ToastAndroid,
+  Platform,
 } from "react-native";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
@@ -28,9 +30,11 @@ import {
   getUserByEmail,
   subscribeToConversation,
 } from "../features/conversations/api";
+import { addContact, removeContact, isContact } from "../features/contacts/api";
 import { firebaseFirestore, getDoc, doc } from "../lib/firebase";
 import { RootStackParamList } from "../navigation/types";
 import { theme } from "../theme";
+import { PresenceBadge } from "../components/PresenceBadge";
 
 type ChatSettingsRouteProp = RouteProp<RootStackParamList, "ChatSettings">;
 type ChatSettingsNavigationProp = StackNavigationProp<
@@ -50,6 +54,9 @@ export default function ChatSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [otherUserDisplayName, setOtherUserDisplayName] = useState("");
   const [otherUserEmail, setOtherUserEmail] = useState("");
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [isContactState, setIsContactState] = useState(false);
+  const [checkingContact, setCheckingContact] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [memberDetails, setMemberDetails] = useState<
@@ -79,6 +86,7 @@ export default function ChatSettingsScreen() {
               (m) => m !== firebaseUser?.uid
             );
             if (otherUserId) {
+              setOtherUserId(otherUserId);
               const displayName = await getUserDisplayName(otherUserId);
               const userDoc = await getDoc(
                 doc(firebaseFirestore, "users", otherUserId)
@@ -94,6 +102,12 @@ export default function ChatSettingsScreen() {
               } else {
                 setOtherUserDisplayName(displayName);
               }
+
+              // Check if this user is a contact
+              setCheckingContact(true);
+              const contactStatus = await isContact(otherUserId);
+              setIsContactState(contactStatus);
+              setCheckingContact(false);
             }
           } else if (conv.type === "group") {
             // Load group name
@@ -137,6 +151,53 @@ export default function ChatSettingsScreen() {
 
     return unsubscribe;
   }, [conversationId, firebaseUser?.uid, navigation]);
+
+  const showToast = (message: string) => {
+    if (Platform.OS === "android") {
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+    } else {
+      Alert.alert("", message);
+    }
+  };
+
+  const handleAddContact = async () => {
+    if (!otherUserId) return;
+
+    try {
+      await addContact(otherUserId);
+      setIsContactState(true);
+      showToast("Contact added");
+    } catch (error) {
+      console.error("Error adding contact:", error);
+      Alert.alert("Error", "Failed to add contact");
+    }
+  };
+
+  const handleRemoveContact = () => {
+    if (!otherUserId) return;
+
+    Alert.alert(
+      "Remove Contact",
+      `Remove ${otherUserDisplayName} from your contacts?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeContact(otherUserId);
+              setIsContactState(false);
+              showToast("Contact removed");
+            } catch (error) {
+              console.error("Error removing contact:", error);
+              Alert.alert("Error", "Failed to remove contact");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleDeleteConversation = () => {
     Alert.alert(
@@ -311,6 +372,39 @@ export default function ChatSettingsScreen() {
             will still have access to the chat.
           </Text>
         </View>
+
+        {/* Add/Remove Contact Section */}
+        <View style={styles.section}>
+          {checkingContact ? (
+            <ActivityIndicator size="small" color={theme.colors.amethystGlow} />
+          ) : isContactState ? (
+            <>
+              <TouchableOpacity
+                style={styles.removeContactButton}
+                onPress={handleRemoveContact}
+              >
+                <Text style={styles.removeContactButtonText}>
+                  Remove Contact
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.contactHint}>
+                Remove {otherUserDisplayName} from your contacts list
+              </Text>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.addContactButton}
+                onPress={handleAddContact}
+              >
+                <Text style={styles.addContactButtonText}>Add Contact</Text>
+              </TouchableOpacity>
+              <Text style={styles.contactHint}>
+                Add {otherUserDisplayName} to your contacts for quick access
+              </Text>
+            </>
+          )}
+        </View>
       </ScrollView>
     );
   }
@@ -372,10 +466,13 @@ export default function ChatSettingsScreen() {
         {memberDetails.map((member) => (
           <View key={member.userId} style={styles.memberRow}>
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>
-                {member.displayName}
-                {member.userId === firebaseUser?.uid && " (You)"}
-              </Text>
+              <View style={styles.memberNameRow}>
+                <Text style={styles.memberName}>
+                  {member.displayName}
+                  {member.userId === firebaseUser?.uid && " (You)"}
+                </Text>
+                <PresenceBadge userId={member.userId} size="small" />
+              </View>
               {member.email && (
                 <Text style={styles.memberEmail}>{member.email}</Text>
               )}
@@ -585,11 +682,16 @@ const styles = StyleSheet.create({
   memberInfo: {
     flex: 1,
   },
+  memberNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
   memberName: {
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text,
     fontWeight: theme.typography.fontWeight.medium,
-    marginBottom: theme.spacing.xs,
   },
   memberEmail: {
     fontSize: theme.typography.fontSize.sm,
@@ -648,6 +750,38 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.semibold,
   },
   leaveHint: {
+    marginTop: theme.spacing.sm,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    textAlign: "center",
+  },
+  addContactButton: {
+    backgroundColor: theme.colors.amethystGlow,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: "center",
+  },
+  addContactButtonText: {
+    color: "#FFFFFF",
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  removeContactButton: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  removeContactButtonText: {
+    color: theme.colors.text,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  contactHint: {
     marginTop: theme.spacing.sm,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,

@@ -16,6 +16,7 @@ const KEYS = {
   OUTBOUND_QUEUE: "@whisper:outbound_queue",
   SELECTED_CONVERSATION: "@whisper:selected_conversation",
   THEME_PREFS: "@whisper:theme_prefs",
+  MESSAGE_CACHE: "@whisper:message_cache",
 };
 
 export interface QueuedMessage {
@@ -32,6 +33,28 @@ export interface QueuedMessage {
 export interface ThemePreferences {
   darkMode?: boolean;
   accentColor?: string;
+}
+
+export interface CachedMessage {
+  id: string;
+  senderId: string;
+  senderName?: string;
+  type: "text" | "image";
+  text?: string;
+  image?: {
+    url: string;
+    thumbnailUrl?: string;
+  };
+  timestamp: number; // Stored as number for JSON serialization
+  status: "sending" | "sent" | "delivered" | "read";
+  tempId?: string;
+}
+
+export interface MessageCache {
+  [conversationId: string]: {
+    messages: CachedMessage[];
+    cachedAt: number;
+  };
 }
 
 /**
@@ -252,6 +275,7 @@ export async function clearAllCachesExceptPrefs(): Promise<void> {
       KEYS.SCROLL_POSITIONS,
       KEYS.OUTBOUND_QUEUE,
       KEYS.SELECTED_CONVERSATION,
+      KEYS.MESSAGE_CACHE,
     ]);
     console.log("Cleared all caches except theme preferences");
   } catch (error) {
@@ -294,3 +318,102 @@ export function shouldRetryMessage(message: QueuedMessage): boolean {
   return timeSinceLastRetry >= requiredDelay;
 }
 
+/**
+ * Message Cache Management
+ */
+
+/**
+ * Cache messages for instant loading
+ */
+export async function cacheMessages(
+  conversationId: string,
+  messages: any[] // Use Message type from api.ts
+): Promise<void> {
+  try {
+    const cacheJson = await AsyncStorage.getItem(KEYS.MESSAGE_CACHE);
+    const cache: MessageCache = cacheJson ? JSON.parse(cacheJson) : {};
+
+    // Convert messages to cacheable format (limit to last 30)
+    const cachedMessages: CachedMessage[] = messages.slice(-30).map((msg) => ({
+      id: msg.id,
+      senderId: msg.senderId,
+      senderName: msg.senderName,
+      type: msg.type,
+      text: msg.text,
+      image: msg.image,
+      timestamp: msg.timestamp.getTime(), // Convert Date to number
+      status: msg.status,
+      tempId: msg.tempId,
+    }));
+
+    cache[conversationId] = {
+      messages: cachedMessages,
+      cachedAt: Date.now(),
+    };
+
+    await AsyncStorage.setItem(KEYS.MESSAGE_CACHE, JSON.stringify(cache));
+  } catch (error) {
+    console.error("Error caching messages:", error);
+  }
+}
+
+/**
+ * Get cached messages for instant display
+ */
+export async function getCachedMessages(
+  conversationId: string
+): Promise<CachedMessage[] | null> {
+  try {
+    const cacheJson = await AsyncStorage.getItem(KEYS.MESSAGE_CACHE);
+    if (!cacheJson) return null;
+
+    const cache: MessageCache = JSON.parse(cacheJson);
+    const conversationCache = cache[conversationId];
+
+    if (!conversationCache) return null;
+
+    // Check if cache is expired (24 hours)
+    const cacheAge = Date.now() - conversationCache.cachedAt;
+    const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+    if (cacheAge > CACHE_EXPIRY) {
+      // Remove expired cache
+      delete cache[conversationId];
+      await AsyncStorage.setItem(KEYS.MESSAGE_CACHE, JSON.stringify(cache));
+      return null;
+    }
+
+    return conversationCache.messages;
+  } catch (error) {
+    console.error("Error getting cached messages:", error);
+    return null;
+  }
+}
+
+/**
+ * Clear message cache for a conversation
+ */
+export async function clearMessageCache(conversationId: string): Promise<void> {
+  try {
+    const cacheJson = await AsyncStorage.getItem(KEYS.MESSAGE_CACHE);
+    if (!cacheJson) return;
+
+    const cache: MessageCache = JSON.parse(cacheJson);
+    delete cache[conversationId];
+    await AsyncStorage.setItem(KEYS.MESSAGE_CACHE, JSON.stringify(cache));
+  } catch (error) {
+    console.error("Error clearing message cache:", error);
+  }
+}
+
+/**
+ * Clear all message caches (called on logout)
+ */
+export async function clearAllMessageCaches(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(KEYS.MESSAGE_CACHE);
+    console.log("Cleared all message caches");
+  } catch (error) {
+    console.error("Error clearing all message caches:", error);
+  }
+}

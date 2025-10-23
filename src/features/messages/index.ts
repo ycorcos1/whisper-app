@@ -14,4 +14,6 @@ export {
 export type { Message, MessageDoc } from "./api";
 export * from "./persistence";
 export * from "./useOptimisticMessages";
+export * from "./readReceipts";
+export * from "./useReadReceipts";
 export * from "./queueProcessor";

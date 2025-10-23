@@ -7,7 +7,14 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+  onSnapshot,
+} from "firebase/firestore";
 import {
   firebaseAuth,
   firebaseFirestore,
@@ -26,6 +33,7 @@ export interface AuthContextType {
   signup: (data: SignupData) => Promise<void>;
   login: (data: LoginData) => Promise<void>;
   logout: () => Promise<void>;
+  updateDisplayName: (newDisplayName: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -37,6 +45,7 @@ export const AuthContext = createContext<AuthContextType>({
   signup: async () => {},
   login: async () => {},
   logout: async () => {},
+  updateDisplayName: async () => {},
   clearError: () => {},
 });
 
@@ -139,8 +148,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateDisplayName = async (newDisplayName: string) => {
+    if (!firebaseUser || !user) {
+      throw new Error("Not authenticated");
+    }
+
+    const trimmedName = newDisplayName.trim();
+    if (!trimmedName) {
+      throw new Error("Display name cannot be empty");
+    }
+
+    if (trimmedName.length < 2) {
+      throw new Error("Display name must be at least 2 characters");
+    }
+
+    if (trimmedName.length > 50) {
+      throw new Error("Display name must be less than 50 characters");
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Update Firebase Auth profile
+      await updateProfile(firebaseUser, { displayName: trimmedName });
+
+      // Update Firestore user document
+      const userRef = doc(firebaseFirestore, "users", firebaseUser.uid);
+      await updateDoc(userRef, {
+        displayName: trimmedName,
+      });
+
+      // Real-time subscription will update the user state automatically
+    } catch (err: any) {
+      console.error("Error updating display name:", err);
+      setError("Failed to update display name. Please try again.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const clearError = () => setError(null);
 
+  // Subscribe to auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
       setLoading(true);
@@ -157,6 +208,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
+  // Subscribe to real-time user profile updates
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    const userRef = doc(firebaseFirestore, "users", firebaseUser.uid);
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const userData = snapshot.data() as User;
+          setUser(userData);
+        }
+      },
+      (error) => {
+        console.error("Error subscribing to user profile:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [firebaseUser]);
+
   const value: AuthContextType = {
     user,
     firebaseUser,
@@ -165,6 +237,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signup,
     login,
     logout,
+    updateDisplayName,
     clearError,
   };
 

@@ -1,8 +1,8 @@
 # Whisper — Active Context
 
-**Last Updated:** PR #12 (Persistence Hardening + Logout Hygiene)  
+**Last Updated:** PR #8 (Image Messaging + Thumbnail Function)  
 **Schema Version:** 1  
-**Current Phase:** Persistence Layer Complete
+**Current Phase:** Media Features - Images Complete
 
 ---
 
@@ -15,6 +15,7 @@
 - **Navigation:** React Navigation (Stack + Bottom Tabs)
 - **State Management:** React hooks + Context + Firebase Realtime
 - **Backend:** Firebase (Auth, Firestore, RTDB, Storage, Functions)
+- **Image Processing:** Sharp (Cloud Functions) for thumbnail generation
 
 ### Project Structure
 
@@ -26,8 +27,9 @@ whisper-app/
 │   ├── screens/             # Screen components
 │   ├── theme/               # Design system (colors, typography, spacing)
 │   ├── features/            # Feature modules (to be added in later PRs)
-│   ├── lib/                 # Utilities and Firebase setup (PR #2)
-│   └── state/               # State management (PR #5)
+│   ├── lib/                 # Utilities and Firebase setup (PR #2, imageUtils PR #8)
+│   ├── components/          # Shared components (Banner, MessageItem, TypingIndicator, PresenceBadge, FullImageModal)
+│   └── state/               # State management (Auth, Notifications)
 ├── memory/                  # Memory Bank for context tracking
 ├── scripts/                 # Build and validation scripts
 ├── .github/workflows/       # CI/CD configuration
@@ -157,9 +159,19 @@ whisper-app/
 **Modified Files:**
 
 - `App.tsx` - Added AppWithPresence wrapper for presence initialization
-- `src/screens/ChatScreen.tsx` - Integrated typing indicators
+- `src/screens/ChatScreen.tsx` - Integrated typing indicators and unified presence label in header
 - `src/screens/ConversationsScreen.tsx` - Added presence badges to conversation list
 - `src/features/conversations/api.ts` - Added otherUserId to ConversationListItem
+
+**Key Updates (Final):**
+
+- Custom header component showing user name and status label
+- Status label shows "Online", "Offline", or "typing..." in real-time
+- Typing indicator now properly displays when other users are typing
+- Typing status overrides online/offline in header
+- Efficient rendering with minimal re-renders
+- **RTDB rules fixed:** Typing data now reads at conversation level
+- **Tested and working:** All features functional and production-ready
 
 ### PR #7 — Delivery States + Read Receipts ✅
 

@@ -8,8 +8,8 @@
     },
     "typing": {
       "$conversationId": {
+        ".read": "auth != null",
         "$uid": {
-          ".read": "auth != null",
           ".write": "auth != null && auth.uid === $uid"
         }
       }
@@ -18,6 +18,3 @@
     ".write": false
   }
 }
-
-
-

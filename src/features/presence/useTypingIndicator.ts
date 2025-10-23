@@ -33,6 +33,7 @@ export const useTypingIndicator = (conversationId: string) => {
 
     const handleTypingChange = (snapshot: any) => {
       const data = snapshot.val();
+
       if (data) {
         const users: TypingUser[] = Object.entries(data)
           .filter(([userId, isTyping]) => {
@@ -144,4 +145,3 @@ export const useTypingIndicator = (conversationId: string) => {
     stopTyping,
   };
 };
-
