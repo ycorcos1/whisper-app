@@ -217,9 +217,7 @@ export default function ConversationsScreen() {
       {items.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No conversations yet</Text>
-          <Text style={styles.emptySubtext}>
-            Tap the + button to start chatting
-          </Text>
+          <Text style={styles.emptySubtext}>Start a new chat</Text>
         </View>
       ) : (
         <FlatList

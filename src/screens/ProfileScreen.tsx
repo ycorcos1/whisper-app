@@ -205,7 +205,7 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
         <Text style={styles.sectionText}>
-          Whisper v2.2.0{"\n"}
+          Whisper v2.4.0{"\n"}
           Secure messaging with style{"\n\n"}
           Built with React Native & Firebase
         </Text>
