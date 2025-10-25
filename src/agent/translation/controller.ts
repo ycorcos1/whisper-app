@@ -239,7 +239,7 @@ export function parseTranslationRequest(query: string): {
   const lowerQuery = query.toLowerCase().trim();
 
   // Debug logging
-  console.log("Parsing translation request:", lowerQuery);
+  // console.log("Parsing translation request:", lowerQuery);
 
   // Check for translation and send pattern (more flexible)
   const translateAndSendPatterns = [
@@ -257,15 +257,15 @@ export function parseTranslationRequest(query: string): {
   for (const pattern of translateAndSendPatterns) {
     const match = lowerQuery.match(pattern);
     if (match) {
-      console.log(
-        "Matched translate_and_send pattern:",
-        pattern.source,
-        "with groups:",
-        match
-      );
+      // console.log(
+      //   "Matched translate_and_send pattern:",
+      //   pattern.source,
+      //   "with groups:",
+      //   match
+      // );
       // Handle patterns without language specification (default to Spanish)
       if (pattern.source.includes("and\\s+send[:s]*(.+)")) {
-        console.log("Using default Spanish for translate_and_send");
+        // console.log("Using default Spanish for translate_and_send");
         return {
           type: "translate_and_send",
           text: match[1].trim(),
@@ -363,6 +363,6 @@ export function parseTranslationRequest(query: string): {
     }
   }
 
-  console.log("No pattern matched, returning unknown");
+  // console.log("No pattern matched, returning unknown");
   return { type: "unknown" };
 }

@@ -21,7 +21,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
 } from "react-native";
 import {
   getKeyboardBehavior,
@@ -125,7 +124,6 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const senderNamesRef = useRef<{ [userId: string]: string }>({});
-  const isFirstFocus = useRef(true);
 
   // Use optimistic messages hook
   const { messages, addOptimisticMessage } = useOptimisticMessages(
@@ -146,8 +144,6 @@ export default function ChatScreen() {
   // Update Casper context when conversation changes
   useEffect(() => {
     setContext({ cid: conversationId });
-    // Reset first focus flag when conversation changes
-    isFirstFocus.current = true;
 
     // Cleanup: Close Casper when leaving this screen
     return () => {
@@ -485,49 +481,11 @@ export default function ChatScreen() {
         });
       }
 
-      // For Android, force scroll to bottom on focus
-      if (Platform.OS === "android" && !loading && messages.length > 0) {
-        const timeoutId = setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }, 100);
-        return () => clearTimeout(timeoutId);
-      }
-
-      // Mark that we've had our first focus
-      isFirstFocus.current = false;
       return undefined;
     }, [conversationId, loading, messages.length])
   );
 
-  // Android-specific initial scroll to bottom
-  useEffect(() => {
-    if (
-      Platform.OS === "android" &&
-      !loading &&
-      messages.length > 0 &&
-      isFirstFocus.current
-    ) {
-      const timeoutId = setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-        isFirstFocus.current = false;
-      }, 200);
-      return () => clearTimeout(timeoutId);
-    }
-    return undefined;
-  }, [loading, messages.length]);
-
-  // Scroll to bottom when new messages are added (smooth animation)
-  useEffect(() => {
-    if (!loading && messages.length > 0) {
-      // Only scroll for new messages, not initial load - keep smooth animation
-      const timeoutId = setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-
-      return () => clearTimeout(timeoutId);
-    }
-    return undefined;
-  }, [messages.length, loading]);
+  // Note: With inverted={true}, no scroll effects needed - messages render at bottom naturally
 
   // Save draft when text changes (debounced)
   useEffect(() => {
@@ -690,10 +648,7 @@ export default function ChatScreen() {
         setUploadProgress(0);
       }
 
-      // Scroll to bottom
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      // Note: With inverted={true}, new messages appear at bottom automatically
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert(
@@ -761,12 +716,13 @@ export default function ChatScreen() {
     setExpandedReadReceipts(new Set());
   };
 
-  // Get item layout for FlatList optimization
-  const getItemLayout = (_: any, index: number) => ({
-    length: 100, // Approximate message height
-    offset: 100 * index,
-    index,
-  });
+  // Note: Removed getItemLayout because messages have variable heights
+  // (text messages, images, read receipts) making fixed height calculations inaccurate
+
+  const renderListFooter = () => {
+    // Add bottom spacing to ensure last message has proper spacing above composer
+    return <View style={{ height: theme.spacing.md }} />;
+  };
 
   const renderListHeader = () => {
     if (!hasMoreMessagesAvailable) return null;
@@ -852,26 +808,22 @@ export default function ChatScreen() {
           <FlatList
             key={conversationId} // Force re-render when conversation changes
             ref={flatListRef}
-            data={messages}
+            data={[...messages].reverse()} // Reverse array so newest messages appear at bottom
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
             maintainVisibleContentPosition={{
               minIndexForVisible: 0,
-              autoscrollToTopThreshold: 10,
+              autoscrollToTopThreshold: -1,
             }}
             onScroll={collapseAllReadReceipts}
             scrollEventThrottle={16}
-            getItemLayout={Platform.OS === "ios" ? getItemLayout : undefined}
-            initialScrollIndex={
-              Platform.OS === "ios" && messages.length > 0
-                ? messages.length - 1
-                : undefined
-            }
+            inverted={true} // Render from bottom up - newest messages at bottom immediately
             initialNumToRender={10}
             maxToRenderPerBatch={10}
             windowSize={10}
             ListHeaderComponent={renderListHeader}
+            ListFooterComponent={renderListFooter}
           />
         )}
 
@@ -1072,7 +1024,8 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: 0, // Remove bottom padding so messages can be right above composer
   },
   composer: {
     flexDirection: "row",

@@ -8,7 +8,7 @@ async function main() {
 
   try {
     // Dynamic import to handle ES modules
-    const validation = await import("../src/server/rag/validation.js");
+    const validation = await import("../functions/src/rag/validation.js");
     const result = await validation.validateRagSystem();
     validation.printValidationResults(result);
 

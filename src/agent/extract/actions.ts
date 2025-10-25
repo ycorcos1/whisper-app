@@ -70,7 +70,7 @@ function extractActionsFromMessage(message: Message): ExtractedAction[] {
     return [];
   }
 
-  console.log("Checking message for actions:", message.text);
+  // console.log("Checking message for actions:", message.text);
 
   const actions: ExtractedAction[] = [];
   const text = message.text;
@@ -78,7 +78,7 @@ function extractActionsFromMessage(message: Message): ExtractedAction[] {
   // Check exclusion patterns first
   for (const pattern of EXCLUSION_PATTERNS) {
     if (pattern.test(text)) {
-      console.log("Message excluded by pattern:", pattern.source);
+      // console.log("Message excluded by pattern:", pattern.source);
       return []; // Skip messages that are clearly not actionable
     }
   }
@@ -91,7 +91,7 @@ function extractActionsFromMessage(message: Message): ExtractedAction[] {
       const fullMatch = match[0];
       const actionText = match[2] || match[1];
 
-      console.log("Found action match:", fullMatch, "->", actionText);
+      // console.log("Found action match:", fullMatch, "->", actionText);
 
       if (!actionText || actionText.trim().length < 5) {
         continue;
@@ -315,26 +315,26 @@ export async function extractActions(
   cid: string,
   forceRefresh: boolean = false
 ): Promise<ExtractedAction[]> {
-  console.log(
-    "Extracting actions for conversation:",
-    cid,
-    "forceRefresh:",
-    forceRefresh
-  );
+  // console.log(
+  //   "Extracting actions for conversation:",
+  //   cid,
+  //   "forceRefresh:",
+  //   forceRefresh
+  // );
 
   // Try cache first (if not forcing refresh)
   if (!forceRefresh) {
     const cached = await loadFromCache(cid);
     if (cached) {
-      console.log("Returning cached actions:", cached.length);
+      // console.log("Returning cached actions:", cached.length);
       return cached;
     }
   }
 
   // Fetch messages
-  console.log("Fetching messages for conversation:", cid);
+  // console.log("Fetching messages for conversation:", cid);
   const messages = await getConversationMessages(cid);
-  console.log("Found messages:", messages.length);
+  // console.log("Found messages:", messages.length);
 
   // Extract actions from all messages
   const allActions: ExtractedAction[] = [];
@@ -343,7 +343,7 @@ export async function extractActions(
     allActions.push(...actions);
   }
 
-  console.log("Total actions extracted:", allActions.length);
+  // console.log("Total actions extracted:", allActions.length);
 
   // Sort by confidence (highest first), then by timestamp (newest first)
   allActions.sort((a, b) => {

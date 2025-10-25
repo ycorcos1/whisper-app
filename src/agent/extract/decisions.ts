@@ -74,12 +74,12 @@ function extractDecisionsFromMessage(message: Message): ExtractedDecision[] {
   const text = message.text;
 
   // Debug logging
-  console.log("Checking message for decisions:", text);
+  // console.log("Checking message for decisions:", text);
 
   // Check exclusion patterns first
   for (const pattern of EXCLUSION_PATTERNS) {
     if (pattern.test(text)) {
-      console.log("Message excluded by pattern:", pattern.source);
+      // console.log("Message excluded by pattern:", pattern.source);
       return []; // Skip messages that are tentative or questions
     }
   }
@@ -96,7 +96,7 @@ function extractDecisionsFromMessage(message: Message): ExtractedDecision[] {
         continue;
       }
 
-      console.log("Found decision match:", fullMatch, "->", decisionText);
+      // console.log("Found decision match:", fullMatch, "->", decisionText);
 
       // Clean up the decision text
       let content = decisionText.trim();
@@ -213,7 +213,7 @@ function extractDecisionsFromMessage(message: Message): ExtractedDecision[] {
         confidence = 0.75; // Good confidence for agreement patterns
       }
 
-      console.log("Extracted decision:", content, "confidence:", confidence);
+      // console.log("Extracted decision:", content, "confidence:", confidence);
 
       decisions.push({
         content,
@@ -363,26 +363,26 @@ export async function extractDecisions(
   cid: string,
   forceRefresh: boolean = false
 ): Promise<ExtractedDecision[]> {
-  console.log(
-    "Extracting decisions for conversation:",
-    cid,
-    "forceRefresh:",
-    forceRefresh
-  );
+  // console.log(
+  //   "Extracting decisions for conversation:",
+  //   cid,
+  //   "forceRefresh:",
+  //   forceRefresh
+  // );
 
   // Try cache first (if not forcing refresh)
   if (!forceRefresh) {
     const cached = await loadFromCache(cid);
     if (cached) {
-      console.log("Returning cached decisions:", cached.length);
+      // console.log("Returning cached decisions:", cached.length);
       return cached;
     }
   }
 
   // Fetch messages
-  console.log("Fetching messages for conversation:", cid);
+  // console.log("Fetching messages for conversation:", cid);
   const messages = await getConversationMessages(cid);
-  console.log("Found messages:", messages.length);
+  // console.log("Found messages:", messages.length);
 
   // Extract decisions from all messages
   const allDecisions: ExtractedDecision[] = [];
@@ -391,7 +391,7 @@ export async function extractDecisions(
     allDecisions.push(...decisions);
   }
 
-  console.log("Total decisions extracted:", allDecisions.length);
+  // console.log("Total decisions extracted:", allDecisions.length);
 
   // Sort by confidence (highest first), then by timestamp (newest first)
   allDecisions.sort((a, b) => {
@@ -403,16 +403,16 @@ export async function extractDecisions(
 
   // Deduplicate
   const uniqueDecisions = deduplicateDecisions(allDecisions);
-  console.log("Unique decisions after deduplication:", uniqueDecisions.length);
+  // console.log("Unique decisions after deduplication:", uniqueDecisions.length);
 
   // Filter by confidence threshold (only keep decisions with confidence > 0.5)
   const filteredDecisions = uniqueDecisions.filter(
     (decision) => decision.confidence > 0.5
   );
-  console.log(
-    "Decisions after confidence filter (>0.5):",
-    filteredDecisions.length
-  );
+  // console.log(
+  //   "Decisions after confidence filter (>0.5):",
+  //   filteredDecisions.length
+  // );
 
   // Save to cache
   await saveToCache(cid, filteredDecisions);

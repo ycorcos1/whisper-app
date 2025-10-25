@@ -132,7 +132,7 @@ export function useActionItems(cid?: string): UseActionItemsResult {
   const { firebaseUser } = useAuth();
 
   const refetch = useCallback(async () => {
-    console.log("useActionItems refetch called, cid:", cid);
+    // console.log("useActionItems refetch called, cid:", cid);
     setLoading(true);
     setError(null);
 
@@ -141,24 +141,24 @@ export function useActionItems(cid?: string): UseActionItemsResult {
       const state = await loadActionState();
       setPinnedSet(state.pinned);
       setDoneSet(state.done);
-      console.log("Loaded pinned actions:", state.pinned.size);
+      // console.log("Loaded pinned actions:", state.pinned.size);
 
       // Extract actions - use global if no conversation context
       let extractedActions: ExtractedAction[];
       if (cid) {
-        console.log("Extracting actions for conversation:", cid);
+        // console.log("Extracting actions for conversation:", cid);
         extractedActions = await extractActions(cid);
       } else if (firebaseUser?.uid) {
-        console.log("Extracting global actions for user:", firebaseUser.uid);
+        // console.log("Extracting global actions for user:", firebaseUser.uid);
         extractedActions = await extractActionsGlobal(firebaseUser.uid);
       } else {
-        console.log("No conversation context or user, setting actions to null");
+        // console.log("No conversation context or user, setting actions to null");
         setActions(null);
         setLoading(false);
         return;
       }
 
-      console.log("Extracted actions:", extractedActions.length);
+      // console.log("Extracted actions:", extractedActions.length);
 
       // Merge with local state
       const actionsWithState: ActionItemWithState[] = extractedActions.map(
@@ -181,7 +181,7 @@ export function useActionItems(cid?: string): UseActionItemsResult {
       });
 
       setActions(actionsWithState);
-      console.log("Final actions with state:", actionsWithState.length);
+      // console.log("Final actions with state:", actionsWithState.length);
     } catch (err: any) {
       console.error("Error fetching actions:", err);
       setError(err.message || "Failed to load actions");
@@ -268,7 +268,7 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
   const { firebaseUser } = useAuth();
 
   const refetch = useCallback(async () => {
-    console.log("useDecisionLog refetch called, cid:", cid);
+    // console.log("useDecisionLog refetch called, cid:", cid);
     setLoading(true);
     setError(null);
 
@@ -276,26 +276,26 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
       // Load local state
       const pinned = await loadPinnedDecisions();
       setPinnedSet(pinned);
-      console.log("Loaded pinned decisions:", pinned.size);
+      // console.log("Loaded pinned decisions:", pinned.size);
 
       // Extract decisions - use global if no conversation context
       let extractedDecisions: ExtractedDecision[];
       if (cid) {
-        console.log("Extracting decisions for conversation:", cid);
+        // console.log("Extracting decisions for conversation:", cid);
         extractedDecisions = await extractDecisions(cid);
       } else if (firebaseUser?.uid) {
-        console.log("Extracting global decisions for user:", firebaseUser.uid);
+        // console.log("Extracting global decisions for user:", firebaseUser.uid);
         extractedDecisions = await extractDecisionsGlobal(firebaseUser.uid);
       } else {
-        console.log(
-          "No conversation context or user, setting decisions to null"
-        );
+        // console.log(
+        //   "No conversation context or user, setting decisions to null"
+        // );
         setDecisions(null);
         setLoading(false);
         return;
       }
 
-      console.log("Extracted decisions:", extractedDecisions.length);
+      // console.log("Extracted decisions:", extractedDecisions.length);
 
       // Merge with local state
       const decisionsWithState: DecisionWithState[] = extractedDecisions.map(
@@ -316,7 +316,7 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
         return b.timestamp - a.timestamp;
       });
 
-      console.log("Final decisions with state:", decisionsWithState.length);
+      // console.log("Final decisions with state:", decisionsWithState.length);
       setDecisions(decisionsWithState);
     } catch (err: any) {
       console.error("Error fetching decisions:", err);

@@ -346,7 +346,7 @@ export const AskTab: React.FC = () => {
     try {
       // Parse the query to determine if it's a translation/composition request
       const parsedRequest = parseTranslationRequest(currentQuery);
-      console.log("Parsed request:", parsedRequest);
+      // console.log("Parsed request:", parsedRequest);
 
       if (parsedRequest.type === "translate") {
         // Handle translation request
@@ -392,7 +392,7 @@ export const AskTab: React.FC = () => {
           Date.now() - startTime
         );
       } else if (parsedRequest.type === "translate_and_send") {
-        console.log("Processing translate_and_send request");
+        // console.log("Processing translate_and_send request");
         // Handle translation and send request
         const translationAndSendRequest: TranslationAndSendRequest = {
           text: parsedRequest.text || "",
@@ -401,11 +401,11 @@ export const AskTab: React.FC = () => {
           sourceLanguage: parsedRequest.sourceLanguage,
         };
 
-        console.log("Translation and send request:", translationAndSendRequest);
+        // console.log("Translation and send request:", translationAndSendRequest);
         const result = await handleTranslationAndSendRequest(
           translationAndSendRequest
         );
-        console.log("Translation and send result:", result);
+        // console.log("Translation and send result:", result);
 
         // Update history with translation and send result
         const updateItem = (item: QAHistoryItem) => {
@@ -826,11 +826,11 @@ export const AskTab: React.FC = () => {
                                 }
                                 conversationId={state.context.cid || ""}
                                 onSend={(messageId) => {
-                                  console.log("Message sent:", messageId);
+                                  // console.log("Message sent:", messageId);
                                 }}
                                 onEdit={() => {
                                   // Handle edit functionality
-                                  console.log("Edit requested");
+                                  // console.log("Edit requested");
                                 }}
                               />
                             </View>
