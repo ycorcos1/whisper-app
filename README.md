@@ -2,6 +2,43 @@
 
 A production-ready mobile messaging app built with React Native (Expo Go) and Firebase.
 
+## 🤖 Casper AI Agent
+
+Whisper includes **Casper**, an AI-powered conversation analysis system that provides:
+
+- **🔍 Semantic Search**: Find relevant messages by meaning, not just keywords
+- **❓ Q&A**: Ask natural language questions about conversations
+- **📝 Summarization**: Generate structured summaries of conversations
+- **✅ Action Extraction**: Automatically identify action items and tasks
+- **🎯 Decision Extraction**: Extract final decisions and agreements
+- **📊 Daily Digest**: Proactive daily summaries across all conversations
+
+### Casper Setup (Optional)
+
+To enable Casper AI features, you'll need OpenAI and Pinecone API keys:
+
+1. **Get OpenAI API Key**: https://platform.openai.com/api-keys (free $5 credit)
+2. **Get Pinecone API Key**: https://app.pinecone.io (free forever with 100K vectors)
+3. **Create Pinecone Index**:
+   - Name: `whisper-casper`
+   - Dimensions: `1536`
+   - Metric: `cosine`
+   - Region: `us-east-1-aws`
+4. **Add to .env**:
+   ```bash
+   OPENAI_API_KEY=sk-your-key-here
+   PINECONE_API_KEY=your-pinecone-key-here
+   PINECONE_INDEX=whisper-casper
+   PINECONE_ENV=us-east-1-aws
+   VECTOR_NAMESPACE=default
+   VECTOR_TOP_K=6
+   ```
+5. **Validate Setup**: `npm run rag:validate`
+
+**Cost**: ~$0-$1/month for development using free tiers.
+
+---
+
 ## 🔑 Run This App Locally (No Access to Private .env Needed)
 
 Follow these steps to run Whisper end-to-end on your own device using your own Firebase project. This takes ~10 minutes and requires no access to private credentials.
@@ -156,6 +193,57 @@ npm run android
 
 - Presence badge UI is wired for future Realtime Database presence; rules are included. Live presence will be added in a later PR.
 
+### Casper AI Agent (Optional)
+
+Access the AI agent via the ghost button (👻) in conversations or chat screens:
+
+- **Ask Tab**: Ask natural language questions about conversation history
+- **Summary Tab**: Generate structured summaries (Last 24h, Last 7d, All unread)
+- **Actions Tab**: View and manage extracted action items with checkboxes
+- **Decisions Tab**: See final decisions and agreements from conversations
+- **Digest Tab**: Daily proactive summaries across all active conversations
+
+Features work offline with cached results and sync when online.
+
+### Casper Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                        Casper UI                             │
+│         (Ask, Summary, Actions, Decisions, Digest)           │
+└────────────────────────┬─────────────────────────────────────┘
+                         │
+                         ▼
+         ┌───────────────────────────────┐
+         │   useCasperRag() Hook         │
+         │   (React Native)              │
+         └───────────┬───────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────────┐
+         │   Firebase Cloud Functions    │
+         │   (LangChain + OpenAI)        │
+         └───────┬───────────────┬───────┘
+                 │               │
+        ┌────────▼────────┐     │
+        │ OpenAI Embeddings│     │
+        │ (text-embedding-3)│     │
+        └─────────────────┘     │
+                                │
+                     ┌──────────▼──────────┐
+                     │   Pinecone Vector   │
+                     │   Database          │
+                     └─────────────────────┘
+```
+
+**Stack:**
+
+- **Vector Database**: Pinecone (free Starter plan)
+- **Embeddings**: OpenAI `text-embedding-3-small` (1536d)
+- **LLM**: OpenAI `gpt-4o-mini`
+- **Framework**: LangChain (for prompting and chains)
+- **Client**: React Native (Expo)
+
 ## 🏗️ Project Structure
 
 ## 🏗️ Project Structure
@@ -165,14 +253,25 @@ whisper-app/
 ├── docs/                    # Product documentation
 │   ├── Whisper_MVP_Final_PRD.md
 │   ├── Whisper_MVP_Final_Task_List.md
-│   └── Whisper_App_Design_Spec.md
+│   ├── Whisper_App_Design_Spec.md
+│   └── Whisper_Phase2_Casper_PRD.md
 ├── src/
+│   ├── agent/               # Casper AI agent system
+│   │   ├── CasperPanel.tsx  # Main AI agent UI
+│   │   ├── CasperProvider.tsx # Context provider
+│   │   ├── useCasper.ts     # Main hook for AI features
+│   │   ├── CasperTabs/      # Individual tab components
+│   │   ├── extract/         # Action/decision extraction
+│   │   ├── summarize/       # Summary generation
+│   │   └── planner/         # Meeting scheduler
 │   ├── navigation/          # Navigation configuration
 │   ├── screens/             # Screen components
 │   ├── theme/               # Design system
 │   ├── features/            # Feature modules (conversations, etc.)
 │   ├── lib/                 # Firebase initialization and shared SDK exports
 │   └── state/               # Auth context and hooks
+├── functions/               # Firebase Cloud Functions
+│   └── src/rag/            # RAG system implementation
 ├── memory/                  # Development context tracking
 ├── scripts/                 # Build and validation scripts
 ├── .github/workflows/       # CI/CD configuration
@@ -189,6 +288,11 @@ whisper-app/
 - `npm run type-check` — TypeScript type checking
 - `npm run lint` — Run ESLint
 
+### Casper AI Scripts
+
+- `npm run rag:validate` — Validate Casper RAG setup (OpenAI + Pinecone)
+- `npm run rag:seed` — Seed test data for Casper features
+
 ## 🧪 Testing
 
 ```bash
@@ -204,6 +308,35 @@ All product requirements, task breakdowns, and design specifications are in the 
 - **PRD:** Complete product requirements and Firebase structure
 - **Task List:** PR-by-PR implementation roadmap
 - **Design Spec:** Visual design system and UI guidelines
+- **Casper RAG:** Complete AI agent system documentation (`README_CASPER_RAG.md`)
+
+### Casper Usage Examples
+
+**Ask Questions:**
+
+```
+"What did we decide about the API design?"
+"Who mentioned the deadline for the project?"
+"What are the next steps for the mobile app?"
+```
+
+**Generate Summaries:**
+
+- Last 24h: Recent conversation highlights
+- Last 7d: Weekly conversation overview
+- All unread: Complete backlog summary
+
+**Action Items:**
+
+- Automatically extracted from conversations
+- Check off completed items
+- Pin important tasks
+
+**Decisions:**
+
+- Final agreements and choices
+- Consensus reached in conversations
+- Key outcomes highlighted
 
 ## 🎯 Development Roadmap
 
@@ -223,6 +356,9 @@ This project follows a structured PR-based development approach:
 - ✅ **PR #12** — Persistence Hardening
 - ✅ **PR #13** — Testing & CI Verification
 - ✅ **PR #14** — Emulator Runbook + Final QA
+- ✅ **PR #15** — Casper AI Agent System
+- ✅ **PR #16** — RAG Implementation & Vector Search
+- ✅ **PR #17** — Meeting Scheduler Integration
 
 ## 🎨 Design System
 
@@ -245,18 +381,65 @@ This project follows a structured PR-based development approach:
 
 ## 🛠️ Troubleshooting
 
+### General Issues
+
 - EMFILE: too many open files (macOS): install Watchman `brew install watchman`
 - Expo QR not visible: press `c` to toggle QR or use Tunnel in Dev Tools
 - Dependency conflicts: try a clean install `rm -rf node_modules package-lock.json && npm install`
-- Missing `babel-preset-expo`: ensure it’s in devDependencies and reinstall
+- Missing `babel-preset-expo`: ensure it's in devDependencies and reinstall
 - Firebase Storage not set up: enable Storage in the Console (avoid init errors)
 - Type errors after edits: run `npm run type-check` and `npm run lint`
+
+### Casper AI Issues
+
+**"Missing required environment variables"**
+
+- Ensure `.env` exists in project root with OpenAI and Pinecone keys
+- Restart Expo server after adding keys
+- Check `app.config.ts` loading variables
+
+**"Invalid API key"**
+
+- Verify key in OpenAI/Pinecone console
+- Check for extra spaces in `.env` file
+- Generate new key if needed
+
+**"Index not found"**
+
+- Create index in Pinecone console with name `whisper-casper`
+- Verify dimensions are set to `1536`
+- Wait for initialization (~1 min)
+
+**"Dimension mismatch"**
+
+- Delete and recreate Pinecone index with dim=1536
+- Ensure using `text-embedding-3-small` model
+
+**Poor answer quality**
+
+- Ensure messages are indexed (run `npm run rag:seed`)
+- Try more specific questions
+- Check that topK is sufficient (6-12)
+
+**Rate limit exceeded**
+
+- Wait a few minutes between requests
+- Check API quotas in provider consoles
+- Reduce request frequency
 
 ## ❓FAQ
 
 - Do I need your private credentials? No. Create your own Firebase project and fill `.env` using the Web App config.
 - Can I run on iOS/Android simulators? Yes. Use `npm run ios` or `npm run android` if you have Xcode/Android Studio set up. Otherwise, Expo Go on device works great.
 - Do I need Firebase emulators? Not required for the mobile app. You can use emulators for rules testing from the CLI if desired.
+
+### Casper AI FAQ
+
+- **Do I need to set up Casper?** No, it's optional. The app works fully without AI features.
+- **How much does Casper cost?** ~$0-$1/month for development using free tiers (OpenAI $5 credit + Pinecone free plan).
+- **Can I use Casper offline?** Yes, it caches results locally and syncs when online.
+- **What if I don't have API keys?** The app runs normally; just skip the Casper setup steps.
+- **Is my data secure?** Yes, vectors are stored in your own Pinecone account, not shared.
 
 ## 📄 License
 
