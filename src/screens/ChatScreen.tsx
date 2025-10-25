@@ -719,12 +719,15 @@ export default function ChatScreen() {
   // Note: Removed getItemLayout because messages have variable heights
   // (text messages, images, read receipts) making fixed height calculations inaccurate
 
-  const renderListFooter = () => {
-    // Add bottom spacing to ensure last message has proper spacing above composer
-    return <View style={{ height: theme.spacing.md }} />;
+  const renderListHeader = () => {
+    // With inverted FlatList, this appears at the bottom
+    // No spacing needed - messages sit naturally above composer
+    return null;
   };
 
-  const renderListHeader = () => {
+  const renderListFooter = () => {
+    // With inverted FlatList, this appears at the top
+    // Show load more button at the top where older messages are
     if (!hasMoreMessagesAvailable) return null;
 
     return (
@@ -751,17 +754,20 @@ export default function ChatScreen() {
     // Calculate read receipts for this message (group chats only)
     const seenByNames: string[] = [];
     if (isGroupChat && conversation) {
-      // Get users who have read this message
+      // Get users who have read this message and are still members of the conversation
       const usersWhoRead = readReceipts.filter(
         (receipt) =>
           receipt.lastReadMid === item.id &&
-          receipt.userId !== firebaseUser?.uid
+          receipt.userId !== firebaseUser?.uid &&
+          conversation.members.includes(receipt.userId) // Only include current members
       );
 
       // Map to display names
       for (const receipt of usersWhoRead) {
-        const displayName = senderNames[receipt.userId] || receipt.userId;
-        seenByNames.push(displayName);
+        const displayName = senderNames[receipt.userId];
+        if (displayName) {
+          seenByNames.push(displayName);
+        }
       }
     }
 
@@ -812,18 +818,21 @@ export default function ChatScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesList}
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-              autoscrollToTopThreshold: -1,
-            }}
             onScroll={collapseAllReadReceipts}
             scrollEventThrottle={16}
             inverted={true} // Render from bottom up - newest messages at bottom immediately
             initialNumToRender={10}
             maxToRenderPerBatch={10}
             windowSize={10}
-            ListHeaderComponent={renderListHeader}
-            ListFooterComponent={renderListFooter}
+            ListHeaderComponent={renderListHeader} // No spacing at bottom
+            ListFooterComponent={renderListFooter} // Load older messages at top
+            onScrollToTop={() => {
+              // Handle status bar tap - scroll to oldest messages (top of inverted list)
+              flatListRef.current?.scrollToOffset({
+                offset: 0,
+                animated: true,
+              });
+            }}
           />
         )}
 
