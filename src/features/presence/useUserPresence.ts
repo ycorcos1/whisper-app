@@ -49,4 +49,3 @@ export const useUserPresence = (userId: string | null): UserPresence => {
 
   return presence;
 };
-

@@ -18,13 +18,17 @@ import {
 import { theme } from "../theme";
 import { useAuth } from "../state/auth/useAuth";
 import { Avatar } from "../components/Avatar";
-import { uploadAvatar } from "../lib/avatarUtils";
-import { firebaseFirestore, doc, updateDoc } from "../lib/firebase";
+import { syncMemberDataAcrossConversations } from "../services/memberSync";
+import { clearUserDisplayNameCache } from "../features/conversations/api";
+// import { uploadAvatar } from "../lib/avatarUtils"; // Commented out - avatar upload disabled
+// import { firebaseFirestore, doc, updateDoc } from "../lib/firebase"; // Commented out - avatar upload disabled
 
 export default function ProfileScreen() {
   const { user, loading, logout, updateDisplayName } = useAuth();
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // const [uploadingAvatar, setUploadingAvatar] = useState(false); // Commented out - avatar upload disabled
+  // const [uploadProgress, setUploadProgress] = useState(0); // Commented out - avatar upload disabled
+  const uploadingAvatar = false; // Temporary - remove when avatar upload is re-enabled
+  const uploadProgress = 0; // Temporary - remove when avatar upload is re-enabled
   const [editingName, setEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState("");
   const [updatingName, setUpdatingName] = useState(false);
@@ -46,42 +50,43 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const handleUploadAvatar = async () => {
-    if (!user) return;
+  // Avatar upload temporarily disabled - uncomment when ready to enable
+  // const handleUploadAvatar = async () => {
+  //   if (!user) return;
 
-    try {
-      setUploadingAvatar(true);
-      setUploadProgress(0);
+  //   try {
+  //     setUploadingAvatar(true);
+  //     setUploadProgress(0);
 
-      // Upload avatar image
-      const avatarUrl = await uploadAvatar(user.uid, (progress) => {
-        setUploadProgress(progress);
-      });
+  //     // Upload avatar image
+  //     const avatarUrl = await uploadAvatar(user.uid, (progress) => {
+  //       setUploadProgress(progress);
+  //     });
 
-      // If user cancelled, avatarUrl will be null
-      if (!avatarUrl) {
-        setUploadingAvatar(false);
-        return; // User cancelled - no error
-      }
+  //     // If user cancelled, avatarUrl will be null
+  //     if (!avatarUrl) {
+  //       setUploadingAvatar(false);
+  //       return; // User cancelled - no error
+  //     }
 
-      // Update user profile in Firestore
-      const userRef = doc(firebaseFirestore, "users", user.uid);
-      await updateDoc(userRef, {
-        photoURL: avatarUrl,
-      });
+  //     // Update user profile in Firestore
+  //     const userRef = doc(firebaseFirestore, "users", user.uid);
+  //     await updateDoc(userRef, {
+  //       photoURL: avatarUrl,
+  //     });
 
-      setUploadingAvatar(false);
-      Alert.alert("Success", "Profile picture updated successfully!");
-    } catch (error: any) {
-      setUploadingAvatar(false);
-      console.error("Error uploading avatar:", error);
+  //     setUploadingAvatar(false);
+  //     Alert.alert("Success", "Profile picture updated successfully!");
+  //   } catch (error: any) {
+  //     setUploadingAvatar(false);
+  //     console.error("Error uploading avatar:", error);
 
-      Alert.alert(
-        "Error",
-        error?.message || "Failed to upload profile picture. Please try again."
-      );
-    }
-  };
+  //     Alert.alert(
+  //       "Error",
+  //       error?.message || "Failed to upload profile picture. Please try again."
+  //     );
+  //   }
+  // };
 
   const handleEditName = () => {
     setNewDisplayName(user?.displayName || "");
@@ -105,6 +110,17 @@ export default function ProfileScreen() {
     try {
       setUpdatingName(true);
       await updateDisplayName(trimmedName);
+
+      // Sync the new display name across all conversations
+      if (user?.uid) {
+        await syncMemberDataAcrossConversations(user.uid, {
+          displayName: trimmedName,
+        });
+
+        // Invalidate name caches so the new name propagates everywhere
+        await clearUserDisplayNameCache(user.uid);
+      }
+
       setEditingName(false);
       Alert.alert("Success", "Display name updated successfully!");
     } catch (error: any) {

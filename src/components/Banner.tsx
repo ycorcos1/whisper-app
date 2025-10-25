@@ -37,7 +37,7 @@ export function Banner({
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(-200)).current;
   const translateX = useRef(new Animated.Value(0)).current;
-  const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pan responder for swipe-to-dismiss
   const panResponder = useRef(
@@ -77,12 +77,12 @@ export function Banner({
 
   useEffect(() => {
     if (visible) {
-      console.log(
-        "Banner becoming visible with title:",
-        title,
-        "message:",
-        message
-      );
+      // console.log(
+      //   "Banner becoming visible with title:",
+      //   title,
+      //   "message:",
+      //   message
+      // );
 
       // Clear any existing timer
       if (dismissTimerRef.current) {
@@ -105,7 +105,7 @@ export function Banner({
         handleDismiss();
       }, autoDismissMs);
     } else {
-      console.log("Banner becoming invisible");
+      // console.log("Banner becoming invisible");
     }
 
     return () => {
@@ -131,16 +131,16 @@ export function Banner({
   };
 
   if (!visible) {
-    console.log("Banner not rendering - visible is false");
+    // console.log("Banner not rendering - visible is false");
     return null;
   }
 
-  console.log(
-    "Banner rendering with visible=true, title:",
-    title,
-    "message:",
-    message
-  );
+  // console.log(
+  //   "Banner rendering with visible=true, title:",
+  //   title,
+  //   "message:",
+  //   message
+  // );
 
   return (
     <Animated.View

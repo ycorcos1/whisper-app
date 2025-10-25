@@ -193,7 +193,7 @@ export function useOptimisticMessages(
     // Set up periodic queue processing (every 5 seconds)
     queueCheckInterval.current = setInterval(() => {
       processQueue();
-    }, 5000);
+    }, 5000) as any;
 
     return () => {
       if (queueCheckInterval.current) {

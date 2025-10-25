@@ -15,12 +15,13 @@ import {
   ActivityIndicator,
   ToastAndroid,
   Platform,
+  Modal,
 } from "react-native";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { AuthContext } from "../state/auth/AuthContext";
 import {
-  getConversation,
+  // getConversation,
   getUserDisplayName,
   ConversationDoc,
   updateGroupName,
@@ -31,10 +32,18 @@ import {
   subscribeToConversation,
 } from "../features/conversations/api";
 import { addContact, removeContact, isContact } from "../features/contacts/api";
-import { firebaseFirestore, getDoc, doc } from "../lib/firebase";
+import {
+  firebaseFirestore,
+  getDoc,
+  doc,
+  setDoc,
+  serverTimestamp,
+  onSnapshot,
+} from "../lib/firebase";
 import { RootStackParamList } from "../navigation/types";
 import { theme } from "../theme";
 import { PresenceBadge } from "../components/PresenceBadge";
+import { MemberRole } from "../types/casper";
 
 type ChatSettingsRouteProp = RouteProp<RootStackParamList, "ChatSettings">;
 type ChatSettingsNavigationProp = StackNavigationProp<
@@ -60,10 +69,19 @@ export default function ChatSettingsScreen() {
   const [groupName, setGroupName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [memberDetails, setMemberDetails] = useState<
-    Array<{ userId: string; displayName: string; email: string }>
+    Array<{
+      userId: string;
+      displayName: string;
+      email: string;
+      role: MemberRole;
+    }>
   >([]);
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+  const [selectedMemberForRole, setSelectedMemberForRole] = useState<{
+    userId: string;
+    currentRole: MemberRole;
+  } | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToConversation(
@@ -110,6 +128,18 @@ export default function ChatSettingsScreen() {
               setCheckingContact(false);
             }
           } else if (conv.type === "group") {
+            // Check if current user is still a member
+            const isCurrentUserMember = conv.members.includes(
+              firebaseUser?.uid || ""
+            );
+
+            if (!isCurrentUserMember) {
+              // User is no longer a member, navigate back
+              Alert.alert("Info", "You are no longer a member of this group");
+              navigation.goBack();
+              return;
+            }
+
             // Load group name
             setGroupName(conv.groupName || "Group Chat");
 
@@ -129,7 +159,26 @@ export default function ChatSettingsScreen() {
                   email = userData.email || "";
                 }
 
-                return { userId: memberId, displayName, email };
+                // Load member role from Firestore
+                let role: MemberRole = "Friend"; // Default
+                try {
+                  const memberDoc = await getDoc(
+                    doc(
+                      firebaseFirestore,
+                      `conversations/${conversationId}/members/${memberId}`
+                    )
+                  );
+                  if (memberDoc.exists()) {
+                    const memberData = memberDoc.data() as {
+                      role?: MemberRole;
+                    };
+                    role = memberData.role || "Friend";
+                  }
+                } catch (error) {
+                  console.error("Error loading member role:", error);
+                }
+
+                return { userId: memberId, displayName, email, role };
               })
             );
             setMemberDetails(details);
@@ -151,6 +200,86 @@ export default function ChatSettingsScreen() {
 
     return unsubscribe;
   }, [conversationId, firebaseUser?.uid, navigation]);
+
+  // Subscribe to real-time user document updates for display names
+  useEffect(() => {
+    if (!conversation) return;
+
+    const unsubscribers: (() => void)[] = [];
+
+    // Subscribe to each member's user document
+    for (const memberId of conversation.members) {
+      const userDocRef = doc(firebaseFirestore, "users", memberId);
+
+      const unsubscribe = onSnapshot(
+        userDocRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const userData = snapshot.data() as {
+              displayName?: string;
+              email?: string;
+            };
+            const displayName =
+              userData.displayName || userData.email || memberId;
+
+            // For DM, update other user's display name (only if changed)
+            if (
+              conversation.type === "dm" &&
+              memberId !== firebaseUser?.uid &&
+              memberId === otherUserId
+            ) {
+              setOtherUserDisplayName((prev) => {
+                if (prev !== displayName) {
+                  return displayName;
+                }
+                return prev;
+              });
+              setOtherUserEmail((prev) => {
+                const newEmail = userData.email || "";
+                if (prev !== newEmail) {
+                  return newEmail;
+                }
+                return prev;
+              });
+            }
+
+            // For group chat, update member details (only if changed)
+            if (conversation.type === "group") {
+              setMemberDetails((prev) => {
+                const member = prev.find((m) => m.userId === memberId);
+                if (
+                  member &&
+                  (member.displayName !== displayName ||
+                    member.email !== (userData.email || member.email))
+                ) {
+                  return prev.map((m) =>
+                    m.userId === memberId
+                      ? {
+                          ...m,
+                          displayName,
+                          email: userData.email || m.email,
+                        }
+                      : m
+                  );
+                }
+                return prev;
+              });
+            }
+          }
+        },
+        (error) => {
+          console.error(`Error listening to user ${memberId}:`, error);
+        }
+      );
+
+      unsubscribers.push(unsubscribe);
+    }
+
+    // Cleanup all listeners
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [conversation, firebaseUser?.uid, otherUserId]);
 
   const showToast = (message: string) => {
     if (Platform.OS === "android") {
@@ -320,6 +449,40 @@ export default function ChatSettingsScreen() {
     );
   };
 
+  const handleRoleChange = async (userId: string, newRole: MemberRole) => {
+    try {
+      const member = memberDetails.find((m) => m.userId === userId);
+      if (!member) return;
+
+      // Update in Firestore
+      await setDoc(
+        doc(
+          firebaseFirestore,
+          `conversations/${conversationId}/members/${userId}`
+        ),
+        {
+          userId,
+          role: newRole,
+          displayName: member.displayName,
+          joinedAt: serverTimestamp(),
+          email: member.email || "",
+        },
+        { merge: true }
+      );
+
+      // Update local state
+      setMemberDetails((prev) =>
+        prev.map((m) => (m.userId === userId ? { ...m, role: newRole } : m))
+      );
+
+      showToast(`Role updated to ${newRole}`);
+      setSelectedMemberForRole(null);
+    } catch (error) {
+      console.error("Error updating role:", error);
+      Alert.alert("Error", "Failed to update member role");
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -476,6 +639,28 @@ export default function ChatSettingsScreen() {
               {member.email && (
                 <Text style={styles.memberEmail}>{member.email}</Text>
               )}
+
+              {/* Role Selector - Only editable for current user */}
+              {member.userId === firebaseUser?.uid ? (
+                <TouchableOpacity
+                  style={styles.roleSelector}
+                  onPress={() =>
+                    setSelectedMemberForRole({
+                      userId: member.userId,
+                      currentRole: member.role,
+                    })
+                  }
+                >
+                  <Text style={styles.roleLabel}>Role:</Text>
+                  <Text style={styles.roleValue}>{member.role}</Text>
+                  <Text style={styles.roleArrow}>›</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.roleSelectorDisabled}>
+                  <Text style={styles.roleLabel}>Role:</Text>
+                  <Text style={styles.roleValueDisabled}>{member.role}</Text>
+                </View>
+              )}
             </View>
 
             {member.userId !== firebaseUser?.uid && (
@@ -545,6 +730,66 @@ export default function ChatSettingsScreen() {
           messages.
         </Text>
       </View>
+
+      {/* Role Selector Modal */}
+      <Modal
+        visible={selectedMemberForRole !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedMemberForRole(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedMemberForRole(null)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Role</Text>
+
+            {(
+              [
+                "Friend",
+                "PM",
+                "SE",
+                "QA",
+                "Design",
+                "Stakeholder",
+              ] as MemberRole[]
+            ).map((role) => (
+              <TouchableOpacity
+                key={role}
+                style={[
+                  styles.roleOption,
+                  selectedMemberForRole?.currentRole === role &&
+                    styles.roleOptionSelected,
+                ]}
+                onPress={() => {
+                  if (selectedMemberForRole) {
+                    handleRoleChange(selectedMemberForRole.userId, role);
+                  }
+                }}
+              >
+                <Text
+                  style={[
+                    styles.roleOptionText,
+                    selectedMemberForRole?.currentRole === role &&
+                      styles.roleOptionTextSelected,
+                  ]}
+                >
+                  {role}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setSelectedMemberForRole(null)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -786,5 +1031,107 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
     textAlign: "center",
+  },
+  // Role Selector Styles
+  roleSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    alignSelf: "flex-start",
+  },
+  roleLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginRight: theme.spacing.xs,
+  },
+  roleValue: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.amethystGlow,
+    fontWeight: theme.typography.fontWeight.semibold,
+    marginRight: theme.spacing.xs,
+  },
+  roleArrow: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+  },
+  roleSelectorDisabled: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    alignSelf: "flex-start",
+    opacity: 0.6,
+  },
+  roleValueDisabled: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: theme.spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
+    width: "100%",
+    maxWidth: 300,
+  },
+  modalTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.md,
+    textAlign: "center",
+  },
+  roleOption: {
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  roleOptionSelected: {
+    backgroundColor: theme.colors.amethystGlow,
+    borderColor: theme.colors.amethystGlow,
+  },
+  roleOptionText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text,
+    textAlign: "center",
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  roleOptionTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  modalCancelButton: {
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
+    marginTop: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  modalCancelButtonText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text,
+    textAlign: "center",
+    fontWeight: theme.typography.fontWeight.medium,
   },
 });

@@ -18,13 +18,21 @@ import {
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
-  Animated,
   Image,
+  Platform,
 } from "react-native";
-import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
+import {
+  getKeyboardBehavior,
+  getChatKeyboardOffset,
+} from "../lib/keyboardUtils";
+import {
+  RouteProp,
+  useRoute,
+  useNavigation,
+  useFocusEffect,
+} from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -64,7 +72,9 @@ import {
   doc as firestoreDoc,
   getDoc,
   firebaseFirestore,
+  onSnapshot,
 } from "../lib/firebase";
+import { useCasper } from "../agent/useCasper";
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, "Chat">;
 type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, "Chat">;
@@ -80,12 +90,12 @@ export default function ChatScreen() {
   const { conversationName, conversationId, fromNewChat } = params;
   const { firebaseUser } = useContext(AuthContext);
   const { setCurrentConversationId } = useNotifications();
+  const { open, setContext, close } = useCasper();
 
   const [messageText, setMessageText] = useState("");
   const [serverMessages, setServerMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [backgroundLoading, setBackgroundLoading] = useState(false);
-  const [initialScrollDone, setInitialScrollDone] = useState(false);
   const [conversation, setConversation] = useState<ConversationDoc | null>(
     null
   );
@@ -101,17 +111,21 @@ export default function ChatScreen() {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [agentPanelVisible, setAgentPanelVisible] = useState(false);
-  const [panelHeight] = useState(new Animated.Value(0));
   const [selectedImages, setSelectedImages] = useState<
     Array<{ uri: string; mimeType?: string }>
   >([]);
   const [messageSentCount, setMessageSentCount] = useState(0);
+  const [messageLimit, setMessageLimit] = useState(15);
+  const [hasMoreMessagesAvailable, setHasMoreMessagesAvailable] =
+    useState(false);
+  const [expandedReadReceipts, setExpandedReadReceipts] = useState<Set<string>>(
+    new Set()
+  );
 
   const flatListRef = useRef<FlatList>(null);
-  const draftTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const senderNamesRef = useRef<{ [userId: string]: string }>({});
+  const isFirstFocus = useRef(true);
 
   // Use optimistic messages hook
   const { messages, addOptimisticMessage } = useOptimisticMessages(
@@ -128,6 +142,18 @@ export default function ChatScreen() {
 
   // Subscribe to read receipts (for group chats)
   const readReceipts = useReadReceipts(conversationId);
+
+  // Update Casper context when conversation changes
+  useEffect(() => {
+    setContext({ cid: conversationId });
+    // Reset first focus flag when conversation changes
+    isFirstFocus.current = true;
+
+    // Cleanup: Close Casper when leaving this screen
+    return () => {
+      close();
+    };
+  }, [conversationId, setContext, close]);
 
   // Override back navigation if coming from NewChat
   useEffect(() => {
@@ -254,6 +280,73 @@ export default function ChatScreen() {
     return unsubscribe;
   }, [conversationId, firebaseUser?.uid, loading, serverMessages.length]);
 
+  // Subscribe to real-time user document updates for display names
+  useEffect(() => {
+    if (!conversation) return;
+
+    const unsubscribers: (() => void)[] = [];
+
+    // Subscribe to each member's user document
+    for (const memberId of conversation.members) {
+      const userDocRef = firestoreDoc(firebaseFirestore, "users", memberId);
+
+      const unsubscribe = onSnapshot(
+        userDocRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const userData = snapshot.data() as {
+              displayName?: string;
+              email?: string;
+              photoURL?: string | null;
+            };
+            const displayName =
+              userData.displayName || userData.email || memberId;
+
+            // Only update if name actually changed
+            const currentName = senderNamesRef.current[memberId];
+            if (currentName !== displayName) {
+              // Update sender names
+              setSenderNames((prev) => ({
+                ...prev,
+                [memberId]: displayName,
+              }));
+              senderNamesRef.current[memberId] = displayName;
+
+              // For DM, update title and photo if it's the other user
+              if (
+                conversation.type === "dm" &&
+                memberId !== firebaseUser?.uid
+              ) {
+                setDisplayTitle(displayName);
+                if (userData.photoURL !== otherUserPhotoURL) {
+                  setOtherUserPhotoURL(userData.photoURL || null);
+                }
+              }
+
+              // For group chat without groupName, update title
+              if (conversation.type === "group" && !conversation.groupName) {
+                const otherMemberNames = conversation.members
+                  .filter((id) => id !== firebaseUser?.uid)
+                  .map((id) => senderNamesRef.current[id] || "Unknown");
+                setDisplayTitle(otherMemberNames.join(", "));
+              }
+            }
+          }
+        },
+        (error) => {
+          console.error(`Error listening to user ${memberId}:`, error);
+        }
+      );
+
+      unsubscribers.push(unsubscribe);
+    }
+
+    // Cleanup all listeners
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [conversation, firebaseUser?.uid]);
+
   // Load cached messages and draft on mount
   useEffect(() => {
     const loadCachedData = async () => {
@@ -312,6 +405,8 @@ export default function ChatScreen() {
               : undefined,
         }));
         setServerMessages(enrichedMsgs);
+        // Check if there are more messages available by comparing loaded count with requested limit
+        setHasMoreMessagesAvailable(enrichedMsgs.length >= messageLimit);
         setLoading(false);
         setBackgroundLoading(false);
 
@@ -330,7 +425,7 @@ export default function ChatScreen() {
         setLoading(false);
         setBackgroundLoading(false);
       },
-      30 // Load 30 most recent messages
+      messageLimit // Use dynamic message limit
     );
 
     return unsubscribe;
@@ -340,6 +435,7 @@ export default function ChatScreen() {
     conversation?.type,
     firebaseUser?.uid,
     serverMessages.length,
+    messageLimit,
   ]);
 
   // Mark messages as read when screen is focused
@@ -367,7 +463,7 @@ export default function ChatScreen() {
             }
           );
         }
-      }, 1000); // 1 second delay
+      }, 200); // Reduced delay for faster response
 
       return () => clearTimeout(readTimer);
     }
@@ -379,16 +475,59 @@ export default function ChatScreen() {
     conversation?.type,
   ]);
 
-  // Scroll to bottom on initial load
+  // Force scroll to bottom when screen comes into focus (navigation back to chat)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Mark conversation as read immediately when screen comes into focus
+      if (!loading && messages.length > 0) {
+        markConversationAsRead(conversationId).catch((error) => {
+          console.error("Error marking conversation as read:", error);
+        });
+      }
+
+      // For Android, force scroll to bottom on focus
+      if (Platform.OS === "android" && !loading && messages.length > 0) {
+        const timeoutId = setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        }, 100);
+        return () => clearTimeout(timeoutId);
+      }
+
+      // Mark that we've had our first focus
+      isFirstFocus.current = false;
+      return undefined;
+    }, [conversationId, loading, messages.length])
+  );
+
+  // Android-specific initial scroll to bottom
   useEffect(() => {
-    if (!loading && messages.length > 0 && !initialScrollDone) {
-      // Scroll to bottom after messages load
-      setTimeout(() => {
+    if (
+      Platform.OS === "android" &&
+      !loading &&
+      messages.length > 0 &&
+      isFirstFocus.current
+    ) {
+      const timeoutId = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: false });
-        setInitialScrollDone(true);
-      }, 100);
+        isFirstFocus.current = false;
+      }, 200);
+      return () => clearTimeout(timeoutId);
     }
-  }, [loading, messages.length, initialScrollDone]);
+    return undefined;
+  }, [loading, messages.length]);
+
+  // Scroll to bottom when new messages are added (smooth animation)
+  useEffect(() => {
+    if (!loading && messages.length > 0) {
+      // Only scroll for new messages, not initial load - keep smooth animation
+      const timeoutId = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [messages.length, loading]);
 
   // Save draft when text changes (debounced)
   useEffect(() => {
@@ -602,35 +741,45 @@ export default function ChatScreen() {
     setSelectedImageUrl(imageUrl);
   };
 
-  const toggleAgentPanel = () => {
-    // Stop any ongoing animation
-    if (animationRef.current) {
-      animationRef.current.stop();
-    }
+  const loadMoreMessages = () => {
+    setMessageLimit((prev) => prev + 10);
+  };
 
-    const newVisibleState = !agentPanelVisible;
-    const toValue = newVisibleState ? 200 : 0;
+  const handleReadReceiptExpand = (messageId: string) => {
+    setExpandedReadReceipts((prev) => new Set(prev).add(messageId));
+  };
 
-    // Update state immediately
-    setAgentPanelVisible(newVisibleState);
-
-    // Start animation
-    animationRef.current = Animated.spring(panelHeight, {
-      toValue,
-      useNativeDriver: false,
-      damping: 20,
-      mass: 0.8,
-      stiffness: 120,
-      overshootClamping: false,
-      restDisplacementThreshold: 0.01,
-      restSpeedThreshold: 0.01,
+  const handleReadReceiptCollapse = (messageId: string) => {
+    setExpandedReadReceipts((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(messageId);
+      return newSet;
     });
+  };
 
-    animationRef.current.start(({ finished }) => {
-      if (finished) {
-        animationRef.current = null;
-      }
-    });
+  const collapseAllReadReceipts = () => {
+    setExpandedReadReceipts(new Set());
+  };
+
+  // Get item layout for FlatList optimization
+  const getItemLayout = (_: any, index: number) => ({
+    length: 100, // Approximate message height
+    offset: 100 * index,
+    index,
+  });
+
+  const renderListHeader = () => {
+    if (!hasMoreMessagesAvailable) return null;
+
+    return (
+      <TouchableOpacity
+        style={styles.loadMoreCTA}
+        onPress={loadMoreMessages}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.loadMoreText}>Load older messages...</Text>
+      </TouchableOpacity>
+    );
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -669,6 +818,9 @@ export default function ChatScreen() {
         showSender={isGroupChat && !isOwn} // Show sender name for group messages
         onImagePress={handleImagePress}
         seenByNames={isGroupChat ? seenByNames : undefined}
+        onReadReceiptExpand={handleReadReceiptExpand}
+        onReadReceiptCollapse={handleReadReceiptCollapse}
+        isReadReceiptExpanded={expandedReadReceipts.has(item.id)}
       />
     );
   };
@@ -685,8 +837,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={90}
+      behavior={getKeyboardBehavior()}
+      keyboardVerticalOffset={getChatKeyboardOffset()}
     >
       <View style={{ flex: 1 }}>
         {messages.length === 0 ? (
@@ -698,6 +850,7 @@ export default function ChatScreen() {
           </View>
         ) : (
           <FlatList
+            key={conversationId} // Force re-render when conversation changes
             ref={flatListRef}
             data={messages}
             keyExtractor={(item) => item.id}
@@ -707,6 +860,18 @@ export default function ChatScreen() {
               minIndexForVisible: 0,
               autoscrollToTopThreshold: 10,
             }}
+            onScroll={collapseAllReadReceipts}
+            scrollEventThrottle={16}
+            getItemLayout={Platform.OS === "ios" ? getItemLayout : undefined}
+            initialScrollIndex={
+              Platform.OS === "ios" && messages.length > 0
+                ? messages.length - 1
+                : undefined
+            }
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            ListHeaderComponent={renderListHeader}
           />
         )}
 
@@ -769,7 +934,7 @@ export default function ChatScreen() {
       <View style={styles.composer}>
         <TouchableOpacity
           style={styles.ghostButton}
-          onPress={toggleAgentPanel}
+          onPress={() => open({ source: "chat", cid: conversationId })}
           disabled={uploadingImage}
         >
           <MaterialCommunityIcons name="ghost" size={20} color="#FFFFFF" />
@@ -817,42 +982,6 @@ export default function ChatScreen() {
           <MaterialCommunityIcons name="arrow-up" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-
-      {/* Casper AI Agent Panel */}
-      <Animated.View
-        style={[
-          styles.agentPanel,
-          {
-            height: panelHeight,
-          },
-        ]}
-        pointerEvents={agentPanelVisible ? "auto" : "none"}
-      >
-        <View style={styles.agentPanelHeader}>
-          <View style={styles.agentPanelTitleContainer}>
-            <MaterialCommunityIcons
-              name="ghost"
-              size={24}
-              color={theme.colors.amethystGlow}
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.agentPanelTitle}>Casper</Text>
-          </View>
-          <TouchableOpacity
-            onPress={toggleAgentPanel}
-            style={styles.closeButton}
-          >
-            <MaterialCommunityIcons
-              name="chevron-down"
-              size={24}
-              color={theme.colors.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.agentPanelContent}>
-          <Text style={styles.agentPanelSubtext}>Coming soon...</Text>
-        </View>
-      </Animated.View>
 
       {/* Full image modal */}
       <FullImageModal
@@ -1047,47 +1176,17 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
     textAlign: "center",
   },
-  agentPanel: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: theme.borderRadius.xl,
-    borderTopRightRadius: theme.borderRadius.xl,
-    overflow: "hidden",
-    ...theme.shadows.lg,
-  },
-  agentPanelHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  loadMoreCTA: {
+    paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
+    alignItems: "center",
+    backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  agentPanelTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  agentPanelTitle: {
-    fontSize: theme.typography.fontSize.xl,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.text,
-  },
-  closeButton: {
-    padding: theme.spacing.xs,
-  },
-  agentPanelContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: theme.spacing.xl,
-  },
-  agentPanelSubtext: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.textSecondary,
+  loadMoreText: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.amethystGlow,
+    fontWeight: theme.typography.fontWeight.medium,
   },
 });

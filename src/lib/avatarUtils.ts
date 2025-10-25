@@ -172,15 +172,10 @@ export function getAvatarUrl(
 /**
  * Delete old avatars for a user (cleanup)
  * Note: In production, you'd want to use a Cloud Function to clean up old avatars
- * @param userId - User's unique ID
- * @param currentAvatarUrl - Current avatar URL to preserve
  */
-export async function cleanupOldAvatars(
-  userId: string,
-  currentAvatarUrl: string
-): Promise<void> {
+export async function cleanupOldAvatars(): Promise<void> {
   // This is a placeholder for future implementation
   // In a real app, you'd want a Cloud Function to handle this
   // to avoid leaving orphaned files in Storage
-  console.log("Avatar cleanup would happen here for user:", userId);
+  // console.log("Avatar cleanup would happen here for user:", userId);
 }

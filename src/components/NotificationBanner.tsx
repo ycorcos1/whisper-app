@@ -14,10 +14,10 @@ export function NotificationBanner() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { currentNotification, dismissNotification } = useNotifications();
 
-  console.log(
-    "NotificationBanner render - currentNotification:",
-    currentNotification
-  );
+  // console.log(
+  //   "NotificationBanner render - currentNotification:",
+  //   currentNotification
+  // );
 
   const handlePress = () => {
     if (!currentNotification) return;

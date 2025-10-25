@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { getDatabase, Database } from "firebase/database";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getFunctions, Functions } from "firebase/functions";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
@@ -52,7 +53,7 @@ const validateConfig = () => {
     );
   }
 
-  console.log("✅ Firebase configuration validated");
+  // console.log("✅ Firebase configuration validated");
 };
 
 // Initialize Firebase app
@@ -61,6 +62,7 @@ let auth: Auth;
 let firestore: Firestore;
 let database: Database;
 let storage: FirebaseStorage;
+let functionsInstance: Functions;
 
 const initializeFirebase = () => {
   try {
@@ -69,10 +71,10 @@ const initializeFirebase = () => {
     // Initialize Firebase App (only once)
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
-      console.log("✅ Firebase app initialized");
+      // console.log("✅ Firebase app initialized");
     } else {
       app = getApps()[0];
-      console.log("✅ Firebase app already initialized");
+      // console.log("✅ Firebase app already initialized");
     }
 
     // Initialize Firebase Auth with AsyncStorage persistence
@@ -80,12 +82,12 @@ const initializeFirebase = () => {
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage),
       });
-      console.log("✅ Firebase Auth initialized with AsyncStorage persistence");
+      // console.log("✅ Firebase Auth initialized with AsyncStorage persistence");
     } catch (error: any) {
       // If auth is already initialized, get the existing instance
       if (error?.code === "auth/already-initialized") {
         auth = getAuth(app);
-        console.log("✅ Firebase Auth already initialized");
+        // console.log("✅ Firebase Auth already initialized");
       } else {
         throw error;
       }
@@ -97,18 +99,18 @@ const initializeFirebase = () => {
         // Enable offline persistence
         experimentalForceLongPolling: true, // Required for React Native
       });
-      console.log("✅ Firestore initialized with offline persistence");
+      // console.log("✅ Firestore initialized with offline persistence");
     } catch (error) {
       const err = error as { code?: string; message?: string };
       if (err?.code === "failed-precondition") {
         // Multiple tabs open, persistence can only be enabled in one tab at a time
         firestore = getFirestore(app);
-        console.log(
-          "⚠️ Firestore initialized without persistence (multi-tab detected)"
-        );
+        // console.log(
+        //   "⚠️ Firestore initialized without persistence (multi-tab detected)"
+        // );
       } else if (err?.message?.includes("already initialized")) {
         firestore = getFirestore(app);
-        console.log("✅ Firestore already initialized");
+        // console.log("✅ Firestore already initialized");
       } else {
         throw error;
       }
@@ -116,13 +118,24 @@ const initializeFirebase = () => {
 
     // Initialize Realtime Database
     database = getDatabase(app);
-    console.log("✅ Realtime Database initialized");
+    // console.log("✅ Realtime Database initialized");
 
     // Initialize Storage
     storage = getStorage(app);
-    console.log("✅ Storage initialized");
+    // console.log("✅ Storage initialized");
 
-    return { app, auth, firestore, database, storage };
+    // Initialize Functions
+    functionsInstance = getFunctions(app);
+    // console.log("✅ Functions initialized");
+
+    return {
+      app,
+      auth,
+      firestore,
+      database,
+      storage,
+      functions: functionsInstance,
+    };
   } catch (error) {
     console.error("❌ Firebase initialization error:", error);
     throw error;
@@ -138,6 +151,7 @@ export const firebaseAuth = firebase.auth;
 export const firebaseFirestore = firebase.firestore;
 export const firebaseDatabase = firebase.database;
 export const firebaseStorage = firebase.storage;
+export const functions = firebase.functions;
 
 // Export Firebase SDK modules for use in other files
 export {
@@ -197,6 +211,11 @@ export {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
+
+export {
+  // Functions
+  httpsCallable,
+} from "firebase/functions";
 
 // Export config for reference
 export { firebaseConfig };

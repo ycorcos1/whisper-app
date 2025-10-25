@@ -20,7 +20,12 @@ import {
   Keyboard,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
+import {
+  getKeyboardBehavior,
+  getNewChatKeyboardOffset,
+} from "../lib/keyboardUtils";
 import { useNavigation } from "@react-navigation/native";
 import type { NavigationProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../navigation/types";
@@ -172,28 +177,44 @@ export default function NewChatScreen() {
 
   // Determine which users to display in main screen
   const displayUsers: User[] = React.useMemo(() => {
+    let users: User[] = [];
     if (activeTab === "contacts") {
       // Show filtered results if searching, otherwise show all contacts
       if (searchQuery.trim()) {
-        return results;
+        users = results;
+      } else {
+        users = contactUsers;
       }
-      return contactUsers;
     } else {
       // Search tab - show search results
-      return results;
+      users = results;
     }
+    // Sort alphabetically by displayName
+    return users.sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, {
+        sensitivity: "base",
+      })
+    );
   }, [activeTab, searchQuery, results, contactUsers]);
 
   // Filtered contacts for group creation modal
   const filteredGroupContacts: User[] = React.useMemo(() => {
+    let users: User[] = [];
     if (!groupSearchQuery.trim()) {
-      return contactUsers;
+      users = contactUsers;
+    } else {
+      const lowerQuery = groupSearchQuery.toLowerCase();
+      users = contactUsers.filter(
+        (user) =>
+          user.displayName.toLowerCase().includes(lowerQuery) ||
+          user.email.toLowerCase().includes(lowerQuery)
+      );
     }
-    const lowerQuery = groupSearchQuery.toLowerCase();
-    return contactUsers.filter(
-      (user) =>
-        user.displayName.toLowerCase().includes(lowerQuery) ||
-        user.email.toLowerCase().includes(lowerQuery)
+    // Sort alphabetically by displayName
+    return users.sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, {
+        sensitivity: "base",
+      })
     );
   }, [groupSearchQuery, contactUsers]);
 
@@ -414,242 +435,253 @@ export default function NewChatScreen() {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "contacts" && styles.tabActive]}
-            onPress={() => {
-              setActiveTab("contacts");
-              setSearchQuery("");
-            }}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "contacts" && styles.tabTextActive,
-              ]}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={getKeyboardBehavior()}
+      keyboardVerticalOffset={getNewChatKeyboardOffset()}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
+          {/* Tabs */}
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === "contacts" && styles.tabActive]}
+              onPress={() => {
+                setActiveTab("contacts");
+                setSearchQuery("");
+              }}
             >
-              Contacts
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "search" && styles.tabActive]}
-            onPress={() => {
-              setActiveTab("search");
-              setSearchQuery("");
-            }}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "search" && styles.tabTextActive,
-              ]}
-            >
-              Search
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder={
-              activeTab === "contacts"
-                ? "Filter contacts..."
-                : "Search users..."
-            }
-            placeholderTextColor={theme.colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="done"
-            blurOnSubmit={true}
-          />
-        </View>
-
-        {/* Content */}
-        {contactsLoading ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color={theme.colors.amethystGlow} />
-            <Text style={styles.emptySubtext}>Loading...</Text>
-          </View>
-        ) : displayUsers.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              {activeTab === "contacts"
-                ? contactUsers.length === 0
-                  ? "No contacts yet"
-                  : "No contacts found"
-                : "No users found"}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {searchQuery
-                ? "Try a different search"
-                : activeTab === "contacts"
-                ? "Search users to start chatting"
-                : "Search for users to start a chat"}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={displayUsers}
-            keyExtractor={(item) => item.id}
-            renderItem={renderUser}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
-
-        {/* Create Group Button */}
-        <TouchableOpacity
-          style={styles.createGroupButton}
-          onPress={() => setShowGroupModal(true)}
-        >
-          <Text style={styles.createGroupButtonText}>Create Group</Text>
-        </TouchableOpacity>
-
-        {/* Group Creation Modal */}
-        <Modal
-          visible={showGroupModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => {
-            setShowGroupModal(false);
-            setSelectedUsers([]);
-            setSelectedUserObjects([]);
-            setGroupSearchQuery("");
-            setEmailInput("");
-          }}
-        >
-          <View style={styles.modalContainer}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowGroupModal(false);
-                  setSelectedUsers([]);
-                  setSelectedUserObjects([]);
-                  setGroupSearchQuery("");
-                  setEmailInput("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>New Group</Text>
-              <TouchableOpacity
-                onPress={handleCreateGroup}
-                disabled={selectedUsers.length === 0}
-              >
-                <Text
-                  style={[
-                    styles.modalCreateText,
-                    selectedUsers.length === 0 &&
-                      styles.modalCreateTextDisabled,
-                  ]}
-                >
-                  Create
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Selected Users Chips */}
-            {selectedUserObjects.length > 0 && (
-              <ScrollView
-                horizontal
-                style={styles.selectedUsersContainer}
-                contentContainerStyle={styles.selectedUsersContent}
-                showsHorizontalScrollIndicator={false}
-              >
-                {selectedUserObjects.map((user) => (
-                  <View key={user.id} style={styles.userChip}>
-                    <Text style={styles.userChipText} numberOfLines={1}>
-                      {user.displayName}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => toggleUserSelectionInGroup(user.id, user)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.userChipRemove}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Search Contacts */}
-            <View style={styles.modalSearchContainer}>
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search contacts..."
-                placeholderTextColor={theme.colors.textSecondary}
-                value={groupSearchQuery}
-                onChangeText={setGroupSearchQuery}
-                returnKeyType="done"
-              />
-            </View>
-
-            {/* Add by Email */}
-            <View style={styles.addEmailContainer}>
-              <TextInput
-                style={styles.emailInput}
-                placeholder="Add by email..."
-                placeholderTextColor={theme.colors.textSecondary}
-                value={emailInput}
-                onChangeText={setEmailInput}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleAddByEmail}
-              />
-              <TouchableOpacity
+              <Text
                 style={[
-                  styles.addEmailButton,
-                  addingByEmail && styles.addEmailButtonDisabled,
+                  styles.tabText,
+                  activeTab === "contacts" && styles.tabTextActive,
                 ]}
-                onPress={handleAddByEmail}
-                disabled={addingByEmail}
               >
-                {addingByEmail ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.addEmailButtonText}>Add</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                Contacts
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === "search" && styles.tabActive]}
+              onPress={() => {
+                setActiveTab("search");
+                setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "search" && styles.tabTextActive,
+                ]}
+              >
+                Search
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Contacts List */}
-            {contactsLoading ? (
-              <View style={styles.modalEmptyState}>
-                <ActivityIndicator
-                  size="large"
-                  color={theme.colors.amethystGlow}
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={
+                activeTab === "contacts"
+                  ? "Filter contacts..."
+                  : "Search users..."
+              }
+              placeholderTextColor={theme.colors.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="done"
+              blurOnSubmit={true}
+            />
+          </View>
+
+          {/* Content */}
+          {contactsLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator
+                size="large"
+                color={theme.colors.amethystGlow}
+              />
+              <Text style={styles.emptySubtext}>Loading...</Text>
+            </View>
+          ) : displayUsers.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                {activeTab === "contacts"
+                  ? contactUsers.length === 0
+                    ? "No contacts yet"
+                    : "No contacts found"
+                  : "No users found"}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {searchQuery
+                  ? "Try a different search"
+                  : activeTab === "contacts"
+                  ? "Search users to start chatting"
+                  : "Search for users to start a chat"}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={displayUsers}
+              keyExtractor={(item) => item.id}
+              renderItem={renderUser}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
+
+          {/* Create Group Button */}
+          <TouchableOpacity
+            style={styles.createGroupButton}
+            onPress={() => setShowGroupModal(true)}
+          >
+            <Text style={styles.createGroupButtonText}>Create Group</Text>
+          </TouchableOpacity>
+
+          {/* Group Creation Modal */}
+          <Modal
+            visible={showGroupModal}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={() => {
+              setShowGroupModal(false);
+              setSelectedUsers([]);
+              setSelectedUserObjects([]);
+              setGroupSearchQuery("");
+              setEmailInput("");
+            }}
+          >
+            <View style={styles.modalContainer}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowGroupModal(false);
+                    setSelectedUsers([]);
+                    setSelectedUserObjects([]);
+                    setGroupSearchQuery("");
+                    setEmailInput("");
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>New Group</Text>
+                <TouchableOpacity
+                  onPress={handleCreateGroup}
+                  disabled={selectedUsers.length === 0}
+                >
+                  <Text
+                    style={[
+                      styles.modalCreateText,
+                      selectedUsers.length === 0 &&
+                        styles.modalCreateTextDisabled,
+                    ]}
+                  >
+                    Create
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Selected Users Chips */}
+              {selectedUserObjects.length > 0 && (
+                <ScrollView
+                  horizontal
+                  style={styles.selectedUsersContainer}
+                  contentContainerStyle={styles.selectedUsersContent}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {selectedUserObjects.map((user) => (
+                    <View key={user.id} style={styles.userChip}>
+                      <Text style={styles.userChipText} numberOfLines={1}>
+                        {user.displayName}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          toggleUserSelectionInGroup(user.id, user)
+                        }
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.userChipRemove}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Search Contacts */}
+              <View style={styles.modalSearchContainer}>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search contacts..."
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={groupSearchQuery}
+                  onChangeText={setGroupSearchQuery}
+                  returnKeyType="done"
                 />
               </View>
-            ) : filteredGroupContacts.length === 0 ? (
-              <View style={styles.modalEmptyState}>
-                <Text style={styles.emptyText}>
-                  {contactUsers.length === 0
-                    ? "No contacts yet"
-                    : "No contacts found"}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  Add users by email above
-                </Text>
+
+              {/* Add by Email */}
+              <View style={styles.addEmailContainer}>
+                <TextInput
+                  style={styles.emailInput}
+                  placeholder="Add by email..."
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={handleAddByEmail}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.addEmailButton,
+                    addingByEmail && styles.addEmailButtonDisabled,
+                  ]}
+                  onPress={handleAddByEmail}
+                  disabled={addingByEmail}
+                >
+                  {addingByEmail ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.addEmailButtonText}>Add</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            ) : (
-              <FlatList
-                data={filteredGroupContacts}
-                keyExtractor={(item) => item.id}
-                renderItem={renderGroupUser}
-                keyboardShouldPersistTaps="handled"
-              />
-            )}
-          </View>
-        </Modal>
-      </View>
-    </TouchableWithoutFeedback>
+
+              {/* Contacts List */}
+              {contactsLoading ? (
+                <View style={styles.modalEmptyState}>
+                  <ActivityIndicator
+                    size="large"
+                    color={theme.colors.amethystGlow}
+                  />
+                </View>
+              ) : filteredGroupContacts.length === 0 ? (
+                <View style={styles.modalEmptyState}>
+                  <Text style={styles.emptyText}>
+                    {contactUsers.length === 0
+                      ? "No contacts yet"
+                      : "No contacts found"}
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    Add users by email above
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredGroupContacts}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderGroupUser}
+                  keyboardShouldPersistTaps="handled"
+                />
+              )}
+            </View>
+          </Modal>
+        </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 

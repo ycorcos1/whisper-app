@@ -11,12 +11,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
   ScrollView,
 } from "react-native";
 import { theme } from "../theme";
+import {
+  getKeyboardBehavior,
+  getAuthKeyboardOffset,
+} from "../lib/keyboardUtils";
 import { useAuth } from "../state/auth/useAuth";
 import type { AuthContextType } from "../state/auth/AuthContext";
 
@@ -101,7 +104,8 @@ export default function AuthScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={getKeyboardBehavior()}
+      keyboardVerticalOffset={getAuthKeyboardOffset()}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}

@@ -183,3 +183,25 @@ export const helloWorld = functions.https.onRequest((request, response) => {
   functions.logger.info("Hello logs!", { structuredData: true });
   response.send("Hello from Whisper Cloud Functions!");
 });
+
+// Export Casper RAG functions
+export { casperSearch, casperAnswer, casperSummarize } from "./rag/functions";
+export { indexMessage } from "./rag/triggers";
+
+// Export Casper Multi-Step Planner functions (PR 7)
+export { casperPlan, casperGetPlan, casperListPlans } from "./rag/planner";
+
+// Export Casper Meeting Scheduler functions
+export {
+  casperCreateMeeting,
+  casperDeleteMeeting,
+  casperUpdateMeetingStatus,
+} from "./rag/meetings";
+
+// Export Casper Translation and Message Composition functions
+export {
+  casperTranslate,
+  casperDetectLanguage,
+  casperGenerateResponse,
+  casperTranslateAndSend,
+} from "./rag/translationFunctions";

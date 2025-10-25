@@ -66,14 +66,14 @@ export async function runMigrations(): Promise<void> {
     const version = currentVersion ? parseInt(currentVersion, 10) : 0;
 
     if (version < APP_STATE_SCHEMA_VERSION) {
-      console.log(
-        `Running migrations from version ${version} to ${APP_STATE_SCHEMA_VERSION}`
-      );
+      // console.log(
+      //   `Running migrations from version ${version} to ${APP_STATE_SCHEMA_VERSION}`
+      // );
 
       // Migration logic for future versions
       if (version < 1) {
         // Version 1: Initial schema, no migration needed
-        console.log("Initializing schema v1");
+        // console.log("Initializing schema v1");
       }
 
       // Save new schema version
@@ -81,9 +81,9 @@ export async function runMigrations(): Promise<void> {
         KEYS.SCHEMA_VERSION,
         APP_STATE_SCHEMA_VERSION.toString()
       );
-      console.log(
-        `Migrations complete. Schema version: ${APP_STATE_SCHEMA_VERSION}`
-      );
+      // console.log(
+      //   `Migrations complete. Schema version: ${APP_STATE_SCHEMA_VERSION}`
+      // );
     }
   } catch (error) {
     console.error("Error running migrations:", error);
@@ -242,7 +242,7 @@ export async function clearAllCachesExceptPrefs(): Promise<void> {
       KEYS.MESSAGE_CACHE,
       KEYS.DISPLAY_NAME_CACHE,
     ]);
-    console.log("Cleared all caches except theme preferences");
+    // console.log("Cleared all caches except theme preferences");
   } catch (error) {
     console.error("Error clearing caches:", error);
   }
@@ -377,7 +377,7 @@ export async function clearMessageCache(conversationId: string): Promise<void> {
 export async function clearAllMessageCaches(): Promise<void> {
   try {
     await AsyncStorage.removeItem(KEYS.MESSAGE_CACHE);
-    console.log("Cleared all message caches");
+    // console.log("Cleared all message caches");
   } catch (error) {
     console.error("Error clearing all message caches:", error);
   }

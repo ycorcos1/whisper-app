@@ -10,11 +10,10 @@ import {
   removeFromQueue,
   updateQueueItem,
   shouldRetryMessage,
-  QueuedMessage,
 } from "./persistence";
 
 let processingQueue = false;
-let queueCheckInterval: NodeJS.Timeout | null = null;
+let queueCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Process the global outbound queue
@@ -26,7 +25,7 @@ export async function processGlobalQueue(): Promise<void> {
 
   try {
     const queue = await getQueue();
-    console.log(`[Queue Processor] Processing ${queue.length} queued messages`);
+    // console.log(`[Queue Processor] Processing ${queue.length} queued messages`);
 
     for (const queuedMsg of queue) {
       // Only process messages that should be retried
@@ -35,9 +34,9 @@ export async function processGlobalQueue(): Promise<void> {
       }
 
       try {
-        console.log(
-          `[Queue Processor] Attempting to send message ${queuedMsg.tempId} (retry ${queuedMsg.retryCount})`
-        );
+        // console.log(
+        //   `[Queue Processor] Attempting to send message ${queuedMsg.tempId} (retry ${queuedMsg.retryCount})`
+        // );
 
         // Attempt to send the message
         if (queuedMsg.type === "text" && queuedMsg.text) {
@@ -49,9 +48,9 @@ export async function processGlobalQueue(): Promise<void> {
 
           // Success! Remove from queue
           await removeFromQueue(queuedMsg.tempId);
-          console.log(
-            `[Queue Processor] Successfully sent message ${queuedMsg.tempId}`
-          );
+          // console.log(
+          //   `[Queue Processor] Successfully sent message ${queuedMsg.tempId}`
+          // );
         } else {
           // Invalid message type or missing data, remove from queue
           console.error(
@@ -101,7 +100,7 @@ export function startGlobalQueueProcessor(): void {
     }, 30000); // 30 seconds
   }
 
-  console.log("[Queue Processor] Started global queue processor");
+  // console.log("[Queue Processor] Started global queue processor");
 }
 
 /**
@@ -113,7 +112,7 @@ export function stopGlobalQueueProcessor(): void {
     queueCheckInterval = null;
   }
 
-  console.log("[Queue Processor] Stopped global queue processor");
+  // console.log("[Queue Processor] Stopped global queue processor");
 }
 
 /**

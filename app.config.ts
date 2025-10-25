@@ -11,6 +11,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const databaseUrl = process.env.FIREBASE_DATABASE_URL || "";
   const schemaVersion = process.env.APP_STATE_SCHEMA_VERSION || "1";
 
+  // RAG Configuration (Casper AI)
+  const openaiApiKey = process.env.OPENAI_API_KEY || "";
+  const pineconeApiKey = process.env.PINECONE_API_KEY || "";
+  const pineconeIndex = process.env.PINECONE_INDEX || "whisper-casper";
+  const pineconeEnv = process.env.PINECONE_ENV || "us-east-1-aws";
+  const vectorNamespace = process.env.VECTOR_NAMESPACE || "default";
+  const vectorTopK = process.env.VECTOR_TOP_K || "6";
+  const casperEnableLLM = process.env.CASPER_ENABLE_LLM || "false";
+
   return {
     ...config,
     name: "Whisper",
@@ -48,6 +57,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       firebaseAppId: appId,
       firebaseDatabaseUrl: databaseUrl,
       appStateSchemaVersion: schemaVersion,
+      // RAG Configuration (Casper AI)
+      OPENAI_API_KEY: openaiApiKey,
+      PINECONE_API_KEY: pineconeApiKey,
+      PINECONE_INDEX: pineconeIndex,
+      PINECONE_ENV: pineconeEnv,
+      VECTOR_NAMESPACE: vectorNamespace,
+      VECTOR_TOP_K: vectorTopK,
+      CASPER_ENABLE_LLM: casperEnableLLM,
     },
     plugins: ["expo-image-picker"],
   };

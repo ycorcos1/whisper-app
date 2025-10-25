@@ -146,11 +146,11 @@ export function NotificationProvider({
 
             // Show notification if conditions are met
             if (shouldNotify) {
-              console.log(
-                "Showing notification for:",
-                conv.name,
-                conv.lastMessageText
-              );
+              // console.log(
+              //   "Showing notification for:",
+              //   conv.name,
+              //   conv.lastMessageText
+              // );
               setCurrentNotification({
                 conversationId: conv.id,
                 conversationName: conv.name,

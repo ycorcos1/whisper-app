@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/state/auth/AuthContext";
 import { NotificationProvider } from "./src/state/NotificationContext";
+import { CasperProvider } from "./src/agent/CasperProvider";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { runMigrations } from "./src/features/messages/persistence";
 import {
@@ -49,7 +50,9 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <NotificationProvider>
-            <AppWithPresence />
+            <CasperProvider>
+              <AppWithPresence />
+            </CasperProvider>
           </NotificationProvider>
         </AuthProvider>
       </SafeAreaProvider>

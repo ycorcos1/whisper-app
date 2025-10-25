@@ -95,6 +95,21 @@ service cloud.firestore {
         allow delete: if false;
       }
       
+      // Members subcollection (Phase 1 - Meeting Scheduler)
+      // Stores member roles for scheduling
+      match /members/{memberId} {
+        // Users can read members in conversations they're part of
+        allow read: if isAuthenticated() && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+        
+        // Users can create/update member documents
+        // Only conversation members can modify roles
+        allow create, update: if isAuthenticated() 
+          && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+        
+        // Members cannot be deleted (only conversation deletion removes them)
+        allow delete: if false;
+      }
+      
       // Messages subcollection
       match /messages/{messageId} {
         // Members of the conversation can read messages
@@ -128,6 +143,59 @@ service cloud.firestore {
     match /receipts/{receiptId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
+    }
+    
+    // ===================================================================
+    // Casper AI Agent Collections (Phase 2)
+    // ===================================================================
+    
+    // Agent Preferences - Users can read/write their own preferences
+    match /assist/agents/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // User Tasks - Users can read/write their own tasks
+    match /assist/tasks/{userId}/{taskId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Daily Digests - Users can read their own digests
+    // (Write restricted to Cloud Functions - implemented in PR3+)
+    match /assist/digests/{userId}/{dateId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false; // Will be written by Cloud Functions
+    }
+    
+    // Conversation Insights (summaries, actions, decisions)
+    // Users can read insights for conversations they're members of
+    match /assist/insights/{conversationId}/{insightId} {
+      allow read: if isAuthenticated() 
+        && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+      // Allow authenticated users to write insights (for now)
+      // In production, this should be restricted to Cloud Functions
+      allow write: if isAuthenticated()
+        && isMember(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+    }
+    
+    // Semantic Chunks for RAG (Phase 3+)
+    // Users can read chunks for conversations they're members of
+    match /semantic_chunks/{chunkId} {
+      allow read: if isAuthenticated() 
+        && isMember(get(/databases/$(database)/documents/conversations/$(resource.data.cid)).data);
+      // Write restricted to Cloud Functions only
+      allow write: if false;
+    }
+    
+    // Multi-Step Agent Plans (PR 7)
+    // Users can read/write their own plans
+    match /agent/{userId}/plans/{planId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Schedules Collection (Phase 1 - Meeting Scheduler)
+    // Users can read/write their own schedule events
+    match /schedules/{userId}/events/{eventId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
     }
     
     // Default: deny all other access

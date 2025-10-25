@@ -64,4 +64,3 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.textSecondary, // Gray for offline
   },
 });
-

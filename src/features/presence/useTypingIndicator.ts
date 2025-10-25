@@ -99,8 +99,8 @@ export const useTypingIndicator = (conversationId: string) => {
       ttlTimerRef.current = setTimeout(() => {
         isTypingRef.current = false;
         setTyping(false);
-      }, TYPING_TTL);
-    }, TYPING_DEBOUNCE);
+      }, TYPING_TTL) as any;
+    }, TYPING_DEBOUNCE) as any;
   }, [setTyping]);
 
   // Stop typing

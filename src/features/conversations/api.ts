@@ -314,6 +314,32 @@ export async function createGroupConversation(userIds: string[]) {
 
   const members = [currentUser.uid, ...userIds].sort();
 
+  // Check if a group conversation with these exact members already exists
+  const q = query(
+    collection(firebaseFirestore, "conversations"),
+    where("type", "==", "group"),
+    where("members", "array-contains", currentUser.uid)
+  );
+
+  const existing = await getDocs(q);
+
+  // Check if any existing group has the exact same members
+  for (const docSnap of existing.docs) {
+    const conv = docSnap.data() as ConversationDoc;
+    const existingMembers = [...conv.members].sort();
+
+    // Compare sorted arrays
+    if (
+      existingMembers.length === members.length &&
+      existingMembers.every((member, index) => member === members[index])
+    ) {
+      // Found existing group with same members - return it
+      // console.log("Found existing group conversation:", docSnap.id);
+      return docSnap.id;
+    }
+  }
+
+  // No existing group found - create new one
   const ref = await addDoc(collection(firebaseFirestore, "conversations"), {
     members,
     type: "group",

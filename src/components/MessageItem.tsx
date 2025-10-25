@@ -24,6 +24,9 @@ export interface MessageItemProps {
   showSender?: boolean; // For group chats
   onImagePress?: (imageUrl: string) => void; // Callback for image press
   seenByNames?: string[]; // For group chat read receipts
+  onReadReceiptExpand?: (messageId: string) => void; // Callback when read receipt expands
+  onReadReceiptCollapse?: (messageId: string) => void; // Callback when read receipt collapses
+  isReadReceiptExpanded?: boolean; // Whether read receipt is expanded
 }
 
 export function MessageItem({
@@ -34,6 +37,9 @@ export function MessageItem({
   showSender = false,
   onImagePress,
   seenByNames,
+  onReadReceiptExpand,
+  onReadReceiptCollapse,
+  isReadReceiptExpanded = false,
 }: MessageItemProps) {
   const [imageLoading, setImageLoading] = React.useState(true);
   const [imageError, setImageError] = React.useState(false);
@@ -195,19 +201,30 @@ export function MessageItem({
       </View>
       {/* Show read receipts for group chats */}
       {seenByNames && seenByNames.length > 0 && (
-        <ReadReceipts seenByNames={seenByNames} />
+        <ReadReceipts
+          seenByNames={seenByNames}
+          onExpand={() => onReadReceiptExpand?.(message.id)}
+          onCollapse={() => onReadReceiptCollapse?.(message.id)}
+          isExpanded={isReadReceiptExpanded}
+        />
       )}
     </View>
   );
 }
 
 function formatTime(date: Date): string {
-  // Always show time in hh:mm format
-  return date.toLocaleTimeString("en-US", {
+  // Show date and time: "MMM d, YYYY hh:mm"
+  const dateStr = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeStr = date.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false, // 24-hour format (hh:mm)
   });
+  return `${dateStr} • ${timeStr}`;
 }
 
 const styles = StyleSheet.create({

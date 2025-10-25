@@ -1,0 +1,62 @@
+═══════════════════════════════════════════════════════════════
+  CASPER AI SETUP REQUIRED
+═══════════════════════════════════════════════════════════════
+
+The Casper AI features require OpenAI and Pinecone API keys.
+This is a ONE-TIME setup that takes ~5 minutes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Get OpenAI API Key
+───────────────────────────
+1. Go to: https://platform.openai.com/api-keys
+2. Sign up (free $5 credit included)
+3. Create new secret key
+4. Copy the key (starts with "sk-...")
+
+STEP 2: Get Pinecone API Key
+─────────────────────────────
+1. Go to: https://app.pinecone.io
+2. Sign up (free forever with 100K vectors)
+3. Copy your API key from console
+
+STEP 3: Create Pinecone Index
+──────────────────────────────
+In Pinecone console, create index with:
+  - Name: whisper-casper
+  - Dimensions: 1536
+  - Metric: cosine
+  - Region: us-east-1-aws
+
+STEP 4: Create .env File
+─────────────────────────
+Create a file named ".env" in project root with:
+
+OPENAI_API_KEY=sk-your-key-here
+PINECONE_API_KEY=your-pinecone-key-here
+PINECONE_INDEX=whisper-casper
+PINECONE_ENV=us-east-1-aws
+VECTOR_NAMESPACE=default
+VECTOR_TOP_K=6
+
+STEP 5: Restart Expo Server
+────────────────────────────
+Stop current server (Ctrl+C) and run:
+  npm start
+
+STEP 6: Validate Setup
+───────────────────────
+Run validation to confirm everything works:
+  npm run rag:validate
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COST: ~$0-$1/month for development
+FREE TIERS:
+  ✓ OpenAI: $5 credit (~30K queries)
+  ✓ Pinecone: 100K vectors forever
+
+DETAILED GUIDE: docs/MVP Logs/PR3_SETUP_GUIDE.md
+
+═══════════════════════════════════════════════════════════════
+

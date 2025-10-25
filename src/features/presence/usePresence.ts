@@ -22,7 +22,9 @@ const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
 export const usePresence = () => {
   const { firebaseUser } = useContext(AuthContext);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
   const presenceRefRef = useRef<any>(null);
   const isAppActiveRef = useRef<boolean>(true);
 
@@ -48,7 +50,7 @@ export const usePresence = () => {
           lastActive: rtdbServerTimestamp(),
         });
 
-        console.log("✅ Presence set to online for user:", userId);
+        // console.log("✅ Presence set to online for user:", userId);
       } catch (error) {
         console.error("❌ Error setting presence:", error);
       }
@@ -61,7 +63,7 @@ export const usePresence = () => {
           online: false,
           lastActive: rtdbServerTimestamp(),
         });
-        console.log("✅ Presence set to offline for user:", userId);
+        // console.log("✅ Presence set to offline for user:", userId);
       } catch (error) {
         console.error("❌ Error setting offline:", error);
       }
