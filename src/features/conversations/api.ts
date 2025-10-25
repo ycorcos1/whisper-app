@@ -550,10 +550,21 @@ export async function removeMemberFromGroup(
     throw new Error("Group must have at least 2 members");
   }
 
+  // Remove the user from the conversation members
   await updateDoc(conversationRef, {
     members: updatedMembers,
     updatedAt: serverTimestamp(),
   });
+
+  // Clean up the user's read receipt data from the participants subcollection
+  const participantRef = doc(
+    firebaseFirestore,
+    "conversations",
+    conversationId,
+    "participants",
+    userId
+  );
+  await deleteDoc(participantRef);
 }
 
 export async function leaveGroup(conversationId: string) {
