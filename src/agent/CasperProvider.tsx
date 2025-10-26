@@ -117,6 +117,9 @@ export const CasperProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Close panel
   const close = useCallback(() => {
+    // Dismiss keyboard when closing Casper panel
+    Keyboard.dismiss();
+
     // Stop any ongoing animation
     if (animationRef.current) {
       animationRef.current.stop();
