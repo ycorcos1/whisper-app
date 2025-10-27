@@ -21,6 +21,7 @@ import { useAuth } from "../../state/auth/useAuth";
 const PINNED_ACTIONS_KEY = "casper:pinned_actions";
 const DONE_ACTIONS_KEY = "casper:done_actions";
 const PINNED_DECISIONS_KEY = "casper:pinned_decisions";
+const DONE_DECISIONS_KEY = "casper:done_decisions";
 
 export interface ActionItemWithState extends ExtractedAction {
   isPinned: boolean;
@@ -29,6 +30,7 @@ export interface ActionItemWithState extends ExtractedAction {
 
 export interface DecisionWithState extends ExtractedDecision {
   isPinned: boolean;
+  isDone: boolean;
 }
 
 interface UseActionItemsResult {
@@ -46,6 +48,7 @@ interface UseDecisionLogResult {
   error: string | null;
   refetch: () => Promise<void>;
   togglePin: (mid: string) => Promise<void>;
+  toggleDone: (mid: string) => Promise<void>;
 }
 
 /**
@@ -117,6 +120,30 @@ async function savePinnedDecisions(pinned: Set<string>): Promise<void> {
     );
   } catch (error) {
     console.warn("Error saving pinned decisions:", error);
+  }
+}
+
+/**
+ * Load done decisions from local storage
+ */
+async function loadDoneDecisions(): Promise<Set<string>> {
+  try {
+    const doneStr = await AsyncStorage.getItem(DONE_DECISIONS_KEY);
+    return new Set(doneStr ? JSON.parse(doneStr) : []);
+  } catch (error) {
+    console.warn("Error loading done decisions:", error);
+    return new Set();
+  }
+}
+
+/**
+ * Save done decisions to local storage
+ */
+async function saveDoneDecisions(done: Set<string>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(DONE_DECISIONS_KEY, JSON.stringify([...done]));
+  } catch (error) {
+    console.warn("Error saving done decisions:", error);
   }
 }
 
@@ -258,13 +285,14 @@ export function useActionItems(cid?: string): UseActionItemsResult {
 }
 
 /**
- * Hook to manage decisions with pin state
+ * Hook to manage decisions with pin/done state
  */
 export function useDecisionLog(cid?: string): UseDecisionLogResult {
   const [decisions, setDecisions] = useState<DecisionWithState[] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [pinnedSet, setPinnedSet] = useState<Set<string>>(new Set());
+  const [doneSet, setDoneSet] = useState<Set<string>>(new Set());
   const { firebaseUser } = useAuth();
 
   const refetch = useCallback(async () => {
@@ -273,10 +301,14 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
     setError(null);
 
     try {
-      // Load local state
-      const pinned = await loadPinnedDecisions();
+      // Load local state (both pinned and done)
+      const [pinned, done] = await Promise.all([
+        loadPinnedDecisions(),
+        loadDoneDecisions(),
+      ]);
       setPinnedSet(pinned);
-      // console.log("Loaded pinned decisions:", pinned.size);
+      setDoneSet(done);
+      // console.log("Loaded pinned decisions:", pinned.size, "done:", done.size);
 
       // Extract decisions - use global if no conversation context
       let extractedDecisions: ExtractedDecision[];
@@ -297,11 +329,12 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
 
       // console.log("Extracted decisions:", extractedDecisions.length);
 
-      // Merge with local state
+      // Merge with local state (both pinned and done)
       const decisionsWithState: DecisionWithState[] = extractedDecisions.map(
         (decision) => ({
           ...decision,
           isPinned: pinned.has(decision.mid),
+          isDone: done.has(decision.mid),
         })
       );
 
@@ -363,9 +396,34 @@ export function useDecisionLog(cid?: string): UseDecisionLogResult {
     [decisions, pinnedSet]
   );
 
+  const toggleDone = useCallback(
+    async (mid: string) => {
+      const newDone = new Set(doneSet);
+      if (newDone.has(mid)) {
+        newDone.delete(mid);
+      } else {
+        newDone.add(mid);
+      }
+
+      setDoneSet(newDone);
+      await saveDoneDecisions(newDone);
+
+      // Update local state
+      if (decisions) {
+        const updated = decisions.map((decision) =>
+          decision.mid === mid
+            ? { ...decision, isDone: newDone.has(mid) }
+            : decision
+        );
+        setDecisions(updated);
+      }
+    },
+    [decisions, doneSet]
+  );
+
   useEffect(() => {
     refetch();
   }, [refetch]);
 
-  return { decisions, loading, error, refetch, togglePin };
+  return { decisions, loading, error, refetch, togglePin, toggleDone };
 }

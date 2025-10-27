@@ -13,6 +13,11 @@ import {
   shouldRetryMessage,
 } from "./persistence";
 import { firebaseAuth } from "../../lib/firebase";
+import {
+  startMessageTimer,
+  endMessageTimer,
+  getAverageDeliveryTime,
+} from "../../lib/performanceMonitor";
 
 export interface OptimisticMessage extends Message {
   isOptimistic: boolean;
@@ -78,6 +83,9 @@ export function useOptimisticMessages(
 
       // Add to optimistic state
       setOptimisticMessages((prev) => new Map(prev).set(tempId, optimisticMsg));
+
+      // Start performance timer
+      startMessageTimer(tempId, conversationId);
 
       // Queue for sending
       await addToQueue({
@@ -148,11 +156,19 @@ export function useOptimisticMessages(
           });
 
           // Attempt to send
-          await sendMessage(
+          const messageId = await sendMessage(
             conversationId,
             queuedMsg.text || "",
             queuedMsg.tempId
           );
+
+          // End performance timer and log delivery time
+          const deliveryTime = endMessageTimer(queuedMsg.tempId, messageId);
+          if (deliveryTime > 0) {
+            console.log(
+              `📊 Message delivered (${deliveryTime}ms). Average: ${getAverageDeliveryTime()}ms`
+            );
+          }
 
           // Success! Remove from queue and optimistic state
           await removeFromQueue(queuedMsg.tempId);

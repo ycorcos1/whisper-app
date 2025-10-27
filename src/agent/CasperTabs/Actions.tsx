@@ -26,7 +26,7 @@ export const ActionsTab: React.FC = () => {
     useActionItems(state.context.cid);
 
   const [refreshing, setRefreshing] = React.useState(false);
-  const [showDone, setShowDone] = React.useState(false);
+  const [showHistory, setShowHistory] = React.useState(false);
   const [isReloading, setIsReloading] = React.useState(false);
 
   const handleRefresh = async () => {
@@ -44,60 +44,67 @@ export const ActionsTab: React.FC = () => {
     setIsReloading(false);
   };
 
-  // Filter actions based on showDone
+  // Filter actions based on showHistory
   const filteredActions = React.useMemo(() => {
     if (!actions) return null;
-    if (showDone) {
-      return actions;
+    if (showHistory) {
+      // History: only show done actions
+      return actions.filter((action) => action.isDone);
     }
+    // Active: only show pending actions
     return actions.filter((action) => !action.isDone);
-  }, [actions, showDone]);
+  }, [actions, showHistory]);
 
   return (
     <View style={styles.container}>
-      {/* Header with show done toggle */}
+      {/* Header with history toggle */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.toggleButton}
-          onPress={() => setShowDone(!showDone)}
-        >
-          <MaterialCommunityIcons
-            name={showDone ? "eye-outline" : "eye-off-outline"}
-            size={18}
-            color={theme.colors.amethystGlow}
-          />
-          <Text style={styles.toggleButtonText}>
-            {showDone ? "Hide Done" : "Show Done"}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.toggleButton}
-          onPress={handleClearCache}
-          disabled={isReloading}
-        >
-          <MaterialCommunityIcons
-            name={isReloading ? "loading" : "cached"}
-            size={18}
-            color={
-              isReloading
-                ? theme.colors.amethystGlow
-                : theme.colors.textSecondary
-            }
-          />
-          <Text
-            style={[
-              styles.toggleButtonText,
-              {
-                color: isReloading
-                  ? theme.colors.amethystGlow
-                  : theme.colors.textSecondary,
-              },
-            ]}
+        <Text style={styles.headerTitle}>
+          {showHistory ? "Action History" : "Action Items"}
+        </Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={() => setShowHistory(!showHistory)}
           >
-            {isReloading ? "Reloading..." : "Reload"}
-          </Text>
-        </TouchableOpacity>
+            <MaterialCommunityIcons
+              name={showHistory ? "arrow-left" : "history"}
+              size={18}
+              color={theme.colors.amethystGlow}
+            />
+            <Text style={styles.toggleButtonText}>
+              {showHistory ? "Back" : "History"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={handleClearCache}
+            disabled={isReloading}
+          >
+            <MaterialCommunityIcons
+              name={isReloading ? "loading" : "cached"}
+              size={18}
+              color={
+                isReloading
+                  ? theme.colors.amethystGlow
+                  : theme.colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.toggleButtonText,
+                {
+                  color: isReloading
+                    ? theme.colors.amethystGlow
+                    : theme.colors.textSecondary,
+                },
+              ]}
+            >
+              {isReloading ? "Reloading..." : "Reload"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -127,28 +134,36 @@ export const ActionsTab: React.FC = () => {
         ) : !filteredActions || filteredActions.length === 0 ? (
           <View style={styles.placeholder}>
             <MaterialCommunityIcons
-              name="clipboard-check-outline"
+              name={showHistory ? "history" : "clipboard-check-outline"}
               size={48}
-              color={theme.colors.amethystGlow}
+              color={
+                showHistory
+                  ? theme.colors.textSecondary
+                  : theme.colors.amethystGlow
+              }
             />
             <Text style={styles.placeholderText}>
-              {showDone ? "No action items yet" : "No pending actions"}
+              {showHistory ? "No History Yet" : "No Pending Actions"}
             </Text>
             <Text style={styles.placeholderSubtext}>
-              {state.context.cid
-                ? showDone
-                  ? "Action items from this conversation will appear here."
-                  : "Mark items as done or toggle 'Show Done' to see completed actions."
-                : showDone
-                ? "Action items from all your conversations will appear here."
-                : "Mark items as done or toggle 'Show Done' to see completed actions."}
+              {showHistory
+                ? "You haven't completed any action items yet."
+                : state.context.cid
+                ? actions && actions.length > 0
+                  ? `All ${actions.length} action items completed! Check History to see them.`
+                  : "Action items from this conversation will appear here."
+                : actions && actions.length > 0
+                ? `All ${actions.length} action items completed! Check History to see them.`
+                : "Action items from all your conversations will appear here."}
             </Text>
           </View>
         ) : (
           <View style={styles.listContainer}>
             {filteredActions && filteredActions.length > 0 && (
               <Text style={styles.sectionTitle}>
-                ✓ Action Items ({filteredActions.length})
+                {showHistory ? "📜 " : "✓ "}
+                {showHistory ? "Completed Actions" : "Action Items"} (
+                {filteredActions.length})
               </Text>
             )}
 
@@ -252,12 +267,22 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  headerTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text,
+  },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
   },
   toggleButton: {
     flexDirection: "row",

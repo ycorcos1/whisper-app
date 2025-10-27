@@ -182,6 +182,7 @@ export {
   onSnapshot,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 export type {

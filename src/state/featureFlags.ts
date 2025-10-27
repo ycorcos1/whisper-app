@@ -12,6 +12,10 @@ const DEFAULT_FLAGS = {
   CASPER_ENABLE_LLM: false, // Enable LLM integration (OpenAI, Anthropic, etc.)
   CASPER_ENABLE_PROACTIVE: true, // Enable proactive suggestions and notifications
   CASPER_INDEX_BATCH: 200, // Number of messages to batch when indexing
+
+  // Translator Mode Flags
+  CASPER_ENABLE_TRANSLATOR: true, // Enable translator mode in Ask tab
+  TRANSLATOR_DEFAULT_LANGUAGE: "English", // Default translation language
 };
 
 /**
@@ -67,6 +71,16 @@ export const featureFlags = {
   CASPER_INDEX_BATCH: getEnvFlag(
     "CASPER_INDEX_BATCH",
     DEFAULT_FLAGS.CASPER_INDEX_BATCH
+  ),
+
+  // Translator Mode
+  CASPER_ENABLE_TRANSLATOR: getEnvFlag(
+    "CASPER_ENABLE_TRANSLATOR",
+    DEFAULT_FLAGS.CASPER_ENABLE_TRANSLATOR
+  ),
+  TRANSLATOR_DEFAULT_LANGUAGE: getEnvFlag(
+    "TRANSLATOR_DEFAULT_LANGUAGE",
+    DEFAULT_FLAGS.TRANSLATOR_DEFAULT_LANGUAGE
   ),
 } as const;
 

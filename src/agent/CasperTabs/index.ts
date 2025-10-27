@@ -7,4 +7,5 @@ export { AskTab } from "./Ask";
 export { SummaryTab } from "./Summary";
 export { ActionsTab } from "./Actions";
 export { DecisionsTab } from "./Decisions";
-export { DigestTab } from "./Digest";
+export { PriorityTab } from "./Priority";
+export { PlannerTab } from "./Planner";

@@ -1,6 +1,7 @@
 /**
  * Ask Tab
  * Freeform question & answer tab for the Casper AI agent
+ * Includes translator mode for live message translation
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -40,6 +41,8 @@ import {
   MessageCompositionRequest,
   TranslationAndSendRequest,
 } from "../translation/controller";
+import { TranslatorView } from "./TranslatorView";
+import { SupportedLanguage } from "../translation/types";
 
 interface QAHistoryItem {
   id: string;
@@ -78,6 +81,12 @@ export const AskTab: React.FC = () => {
   const [hasShownFollowup, setHasShownFollowup] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const shouldAutoScrollRef = useRef(true);
+
+  // Translator mode state
+  const [translatorMode, setTranslatorMode] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState<SupportedLanguage>(
+    (flags.translatorDefaultLanguage as SupportedLanguage) || "English"
+  );
 
   // Load recent sessions on mount or when conversation changes
   useEffect(() => {
@@ -582,6 +591,18 @@ export const AskTab: React.FC = () => {
   const remainingAttempts = rateLimiter.getRemainingAttempts();
   const canSend = query.trim().length > 0 && remainingAttempts > 0; // Removed !loading check
 
+  // If translator mode is enabled and feature flag allows it, render TranslatorView
+  if (translatorMode && flags.enableTranslator) {
+    return (
+      <TranslatorView
+        targetLanguage={targetLanguage}
+        setTargetLanguage={setTargetLanguage}
+        onDisable={() => setTranslatorMode(false)}
+      />
+    );
+  }
+
+  // Normal Ask mode
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -602,9 +623,25 @@ export const AskTab: React.FC = () => {
         </View>
       ) : (
         <>
-          {/* Header with Clear Button */}
-          {history.length > 0 && (
-            <View style={styles.header}>
+          {/* Header with Translator Toggle and Clear Button */}
+          <View style={styles.header}>
+            {/* Translator Toggle (left side) */}
+            {flags.enableTranslator && (
+              <TouchableOpacity
+                style={styles.translatorToggle}
+                onPress={() => setTranslatorMode(true)}
+              >
+                <MaterialCommunityIcons
+                  name="translate"
+                  size={20}
+                  color={theme.colors.amethystGlow}
+                />
+                <Text style={styles.translatorToggleText}>Translator</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Clear History Button (right side) */}
+            {history.length > 0 && (
               <TouchableOpacity
                 style={styles.clearButton}
                 onPress={handleClearHistory}
@@ -616,8 +653,8 @@ export const AskTab: React.FC = () => {
                 />
                 <Text style={styles.clearButtonText}>Clear History</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
 
           {/* Content Area - Q&A history */}
           <ScrollView
@@ -939,12 +976,28 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  translatorToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: "rgba(139, 92, 246, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.3)",
+  },
+  translatorToggleText: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.amethystGlow,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   clearButton: {
     flexDirection: "row",

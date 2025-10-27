@@ -391,6 +391,30 @@ export function subscribeToConversation(
   );
 }
 
+/**
+ * Force refresh conversation list from server
+ * Useful for syncing after coming back online
+ */
+export async function refreshConversationList(): Promise<void> {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) return;
+
+  const q = query(
+    collection(firebaseFirestore, "conversations"),
+    where("members", "array-contains", currentUser.uid),
+    orderBy("updatedAt", "desc"),
+    limit(50)
+  );
+
+  try {
+    // Execute query to force Firestore to sync from server
+    await getDocs(q);
+    // console.log("✅ Conversation list refreshed from server");
+  } catch (error) {
+    console.error("Error refreshing conversation list:", error);
+  }
+}
+
 // In-memory cache for user display names (for instant access within a session)
 const displayNameCache = new Map<string, string>();
 

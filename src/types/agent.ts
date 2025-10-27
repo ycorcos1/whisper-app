@@ -8,7 +8,7 @@ export type CasperTab =
   | "Summary"
   | "Actions"
   | "Decisions"
-  | "Digest"
+  | "Priority"
   | "Planner";
 
 export type CasperSource = "conversations" | "chat";
@@ -54,4 +54,6 @@ export interface CasperFeatureFlags {
   enableLLM: boolean;
   enableProactive: boolean;
   indexBatchSize: number;
+  enableTranslator: boolean;
+  translatorDefaultLanguage: string;
 }

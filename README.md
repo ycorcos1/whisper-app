@@ -7,11 +7,13 @@ A production-ready mobile messaging app built with React Native (Expo Go) and Fi
 Whisper includes **Casper**, an AI-powered conversation analysis system that provides:
 
 - **🔍 Semantic Search**: Find relevant messages by meaning, not just keywords
-- **❓ Q&A**: Ask natural language questions about conversations
-- **📝 Summarization**: Generate structured summaries of conversations
-- **✅ Action Extraction**: Automatically identify action items and tasks
-- **🎯 Decision Extraction**: Extract final decisions and agreements
-- **📊 Daily Digest**: Proactive daily summaries across all conversations
+- **❓ Q&A**: Ask natural language questions about conversations with RAG-based vector search
+- **🌐 Translator**: Real-time message translation with auto-language detection (English, Spanish, French, Italian)
+- **📝 Summarization**: Generate structured summaries of conversations (24h, 7d, all unread)
+- **⚠️ Priority Detection**: Automatically flag urgent and high-priority messages
+- **✅ Action Extraction**: Automatically identify action items and tasks with pin/done tracking
+- **🎯 Decision Extraction**: Extract final decisions and agreements with history tracking
+- **🗓️ Planner**: Multi-step agent orchestration for meeting scheduling and task management
 
 ### Casper Setup (Optional)
 
@@ -197,20 +199,37 @@ npm run android
 
 Access the AI agent via the ghost button (👻) in conversations or chat screens:
 
-- **Ask Tab**: Ask natural language questions about conversation history
+- **Ask Tab**:
+  - Ask natural language questions about conversation history using RAG-based vector search
+  - Toggle Translator mode for real-time message translation
+  - Translator features: auto-language detection, select target language (English/Spanish/French/Italian)
+  - Translation automatically sends messages in the recipient's language
 - **Summary Tab**: Generate structured summaries (Last 24h, Last 7d, All unread)
-- **Actions Tab**: View and manage extracted action items with checkboxes
-- **Decisions Tab**: See final decisions and agreements from conversations
-- **Digest Tab**: Daily proactive summaries across all active conversations
 
-Features work offline with cached results and sync when online.
+- **Actions Tab**:
+  - View and manage extracted action items with pin/done tracking
+  - History view shows completed action items
+  - Persistent storage using AsyncStorage
+- **Decisions Tab**:
+  - See final decisions and agreements from conversations
+  - Mark decisions as done with history tracking
+  - Pin important decisions for quick access
+- **Priority Tab**:
+  - Automatically detects urgent and high-priority messages (last 30 days)
+  - Smart detection based on keywords, urgency indicators, time-sensitive phrases
+  - Mark messages as done with history view
+  - Shows conversation context (group name or DM participant)
+- **Planner Tab**: Multi-step agent orchestration for meeting scheduling and task management
+
+Features work offline with cached results and sync when online. Pull-to-refresh and automatic network reconnect ensure conversation list stays up-to-date.
 
 ### Casper Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        Casper UI                             │
-│         (Ask, Summary, Actions, Decisions, Digest)           │
+│   (Ask, Summary, Actions, Decisions, Priority, Planner)     │
+│          + Translator Mode with Language Detection           │
 └────────────────────────┬─────────────────────────────────────┘
                          │
                          ▼
@@ -223,11 +242,13 @@ Features work offline with cached results and sync when online.
          ┌───────────────────────────────┐
          │   Firebase Cloud Functions    │
          │   (LangChain + OpenAI)        │
+         │   + Translation Functions     │
          └───────┬───────────────┬───────┘
                  │               │
         ┌────────▼────────┐     │
         │ OpenAI Embeddings│     │
         │ (text-embedding-3)│     │
+        │ + GPT-4o-mini    │     │
         └─────────────────┘     │
                                 │
                      ┌──────────▼──────────┐
@@ -241,8 +262,10 @@ Features work offline with cached results and sync when online.
 - **Vector Database**: Pinecone (free Starter plan)
 - **Embeddings**: OpenAI `text-embedding-3-small` (1536d)
 - **LLM**: OpenAI `gpt-4o-mini`
+- **Translation**: OpenAI API with auto-language detection
 - **Framework**: LangChain (for prompting and chains)
 - **Client**: React Native (Expo)
+- **Persistence**: AsyncStorage for offline caching and done states
 
 ## 🏗️ Project Structure
 
@@ -254,24 +277,30 @@ whisper-app/
 │   ├── Whisper_MVP_Final_PRD.md
 │   ├── Whisper_MVP_Final_Task_List.md
 │   ├── Whisper_App_Design_Spec.md
-│   └── Whisper_Phase2_Casper_PRD.md
+│   ├── Whisper_Phase2_Casper_PRD.md
+│   ├── MessageAI Rubric.md
+│   └── TRANSLATOR_MODE_GUIDE.md
 ├── src/
 │   ├── agent/               # Casper AI agent system
 │   │   ├── CasperPanel.tsx  # Main AI agent UI
 │   │   ├── CasperProvider.tsx # Context provider
 │   │   ├── useCasper.ts     # Main hook for AI features
-│   │   ├── CasperTabs/      # Individual tab components
-│   │   ├── extract/         # Action/decision extraction
+│   │   ├── CasperTabs/      # Individual tab components (Ask, Summary, Actions, Decisions, Priority, Planner)
+│   │   ├── extract/         # Action/decision/priority extraction
 │   │   ├── summarize/       # Summary generation
-│   │   └── planner/         # Meeting scheduler
+│   │   ├── planner/         # Meeting scheduler
+│   │   ├── translation/     # Translation service, language detection, caching
+│   │   ├── components/      # LanguageSelector, TranslatedMessage, TranslatorView
+│   │   └── hooks/           # useExtraction (action/decision with done states)
 │   ├── navigation/          # Navigation configuration
-│   ├── screens/             # Screen components
+│   ├── screens/             # Screen components (Chat, Conversations, Profile)
 │   ├── theme/               # Design system
-│   ├── features/            # Feature modules (conversations, etc.)
-│   ├── lib/                 # Firebase initialization and shared SDK exports
-│   └── state/               # Auth context and hooks
+│   ├── features/            # Feature modules (conversations, messages with optimistic UI)
+│   ├── lib/                 # Firebase initialization, performance monitoring
+│   ├── services/            # Translation API, network utilities
+│   └── state/               # Auth context, feature flags
 ├── functions/               # Firebase Cloud Functions
-│   └── src/rag/            # RAG system implementation
+│   └── src/rag/            # RAG system + translation functions
 ├── memory/                  # Development context tracking
 ├── scripts/                 # Build and validation scripts
 ├── .github/workflows/       # CI/CD configuration
@@ -320,6 +349,16 @@ All product requirements, task breakdowns, and design specifications are in the 
 "What are the next steps for the mobile app?"
 ```
 
+**Translator Mode:**
+
+```
+1. Toggle "Translator" button in Ask tab header
+2. Select target language (English, Spanish, French, Italian)
+3. View conversation history translated to your language
+4. Type in your language - messages auto-translate to recipient's language
+5. Auto-detects conversation language from incoming messages
+```
+
 **Generate Summaries:**
 
 - Last 24h: Recent conversation highlights
@@ -331,12 +370,22 @@ All product requirements, task breakdowns, and design specifications are in the 
 - Automatically extracted from conversations
 - Check off completed items
 - Pin important tasks
+- View history of completed actions
 
 **Decisions:**
 
 - Final agreements and choices
 - Consensus reached in conversations
 - Key outcomes highlighted
+- Pin decisions and mark as done
+- History view for completed decisions
+
+**Priority Messages:**
+
+- Urgent and high-priority detection (last 30 days)
+- Based on keywords, exclamations, urgency indicators
+- Mark as done when addressed
+- View history of completed priority items
 
 ## 🎯 Development Roadmap
 
@@ -427,6 +476,19 @@ This project follows a structured PR-based development approach:
 - Check API quotas in provider consoles
 - Reduce request frequency
 
+**Translation errors**
+
+- Verify OpenAI API key is active
+- Check internet connection
+- Translation cache expires after 1 hour
+- Supported languages: English, Spanish, French, Italian
+
+**BloomFilter warnings**
+
+- These are internal Firebase SDK warnings
+- Do not affect app functionality
+- Safe to ignore - not related to your code
+
 ## ❓FAQ
 
 - Do I need your private credentials? No. Create your own Firebase project and fill `.env` using the Web App config.
@@ -440,6 +502,9 @@ This project follows a structured PR-based development approach:
 - **Can I use Casper offline?** Yes, it caches results locally and syncs when online.
 - **What if I don't have API keys?** The app runs normally; just skip the Casper setup steps.
 - **Is my data secure?** Yes, vectors are stored in your own Pinecone account, not shared.
+- **What languages does Translator support?** English, Spanish, French, and Italian with auto-detection.
+- **How does Priority Detection work?** Analyzes keywords, urgency indicators, time-sensitive phrases, exclamation marks, and all-caps text.
+- **Can I see my completed tasks?** Yes, Actions, Decisions, and Priority tabs all have History views.
 
 ## 📄 License
 

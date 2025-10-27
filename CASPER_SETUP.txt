@@ -5,6 +5,14 @@
 The Casper AI features require OpenAI and Pinecone API keys.
 This is a ONE-TIME setup that takes ~5 minutes.
 
+Casper provides:
+  ✓ RAG-based Q&A with semantic search
+  ✓ Real-time translation (English/Spanish/French/Italian)
+  ✓ Priority message detection
+  ✓ Action & decision tracking with history
+  ✓ Conversation summarization
+  ✓ Meeting scheduler & planner
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 STEP 1: Get OpenAI API Key
@@ -56,7 +64,22 @@ FREE TIERS:
   ✓ OpenAI: $5 credit (~30K queries)
   ✓ Pinecone: 100K vectors forever
 
-DETAILED GUIDE: docs/MVP Logs/PR3_SETUP_GUIDE.md
+FEATURES INCLUDED:
+  📝 Ask Tab: RAG-based Q&A + Translator Mode
+  📊 Summary Tab: 24h/7d/unread summaries
+  ✅ Actions Tab: Auto-extracted tasks with history
+  🎯 Decisions Tab: Track agreements with history
+  ⚠️ Priority Tab: Urgent message detection (30 days)
+  🗓️ Planner Tab: Meeting scheduler & orchestration
+
+DETAILED GUIDES:
+  • Translation: docs/TRANSLATOR_MODE_GUIDE.md
+  • Priority: docs/PRIORITY_TAB_TESTING_GUIDE.md
+  • Full setup: docs/MVP Logs/PR3_SETUP_GUIDE.md
+
+KNOWN ISSUES:
+  • BloomFilter warnings: Safe to ignore (internal Firebase SDK)
+  • Offline mode: All features cache locally and sync online
 
 ═══════════════════════════════════════════════════════════════
 

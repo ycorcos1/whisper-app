@@ -3,14 +3,18 @@
  * List of all user conversations with floating "+" button
  */
 
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  RefreshControl,
+  AppState,
+  AppStateStatus,
 } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { theme } from "../theme";
@@ -18,6 +22,7 @@ import {
   subscribeToUserConversations,
   ConversationListItem,
   clearConversationForCurrentUser,
+  refreshConversationList,
 } from "../features/conversations/api";
 import { PresenceBadge } from "../components/PresenceBadge";
 import { Avatar } from "../components/Avatar";
@@ -31,12 +36,60 @@ export default function ConversationsScreen() {
   const [items, setItems] = useState<ConversationListItem[]>([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
   const { open } = useCasper();
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     const unsubscribe = subscribeToUserConversations(setItems, console.error);
     return unsubscribe;
   }, []);
+
+  // Handle app state changes to refresh conversation list when coming to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      // If app is coming to foreground from background/inactive
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        // Refresh conversation list to sync any offline changes
+        refreshConversationList().catch(console.error);
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Handle network state changes to refresh when coming back online
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      // When network comes back online (from offline)
+      if (state.isConnected && state.isInternetReachable) {
+        console.log("🌐 Network reconnected, refreshing conversation list");
+        refreshConversationList().catch(console.error);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshConversationList();
+    setRefreshing(false);
+  };
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -191,6 +244,14 @@ export default function ConversationsScreen() {
           data={items}
           keyExtractor={(item) => item.id}
           renderItem={renderConversation}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.amethystGlow}
+              colors={[theme.colors.amethystGlow]}
+            />
+          }
         />
       )}
 

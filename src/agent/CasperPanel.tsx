@@ -20,7 +20,7 @@ import { AskTab } from "./CasperTabs/Ask";
 import { SummaryTab } from "./CasperTabs/Summary";
 import { ActionsTab } from "./CasperTabs/Actions";
 import { DecisionsTab } from "./CasperTabs/Decisions";
-import { DigestTab } from "./CasperTabs/Digest";
+import { PriorityTab } from "./CasperTabs/Priority";
 import { PlannerTab } from "./CasperTabs/Planner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { cancelAllQueries } from "./qa/controller";
@@ -41,7 +41,7 @@ export const CasperPanel: React.FC = () => {
     "Summary",
     "Actions",
     "Decisions",
-    "Digest",
+    "Priority",
     "Planner",
   ];
 
@@ -71,10 +71,10 @@ export const CasperPanel: React.FC = () => {
             <DecisionsTab />
           </ErrorBoundary>
         );
-      case "Digest":
+      case "Priority":
         return (
-          <ErrorBoundary fallbackMessage="Failed to load Digest tab. Please try again.">
-            <DigestTab />
+          <ErrorBoundary fallbackMessage="Failed to load Priority tab. Please try again.">
+            <PriorityTab />
           </ErrorBoundary>
         );
       case "Planner":
@@ -84,7 +84,7 @@ export const CasperPanel: React.FC = () => {
           </ErrorBoundary>
         );
       default:
-        return <DigestTab />;
+        return <PriorityTab />;
     }
   };
 

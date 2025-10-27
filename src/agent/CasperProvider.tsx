@@ -26,7 +26,7 @@ export const CasperProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [state, setState] = useState<CasperState>({
     visible: false,
-    activeTab: "Digest",
+    activeTab: "Priority",
     context: {},
     source: null,
   });
@@ -56,7 +56,7 @@ export const CasperProvider: React.FC<{ children: React.ReactNode }> = ({
       "Summary",
       "Actions",
       "Decisions",
-      "Digest",
+      "Priority",
       "Planner",
     ].includes(tab);
   };
@@ -73,11 +73,11 @@ export const CasperProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       // Determine default tab based on source
-      let defaultTab: CasperTab = "Digest";
+      let defaultTab: CasperTab = "Priority";
       if (opts.defaultTab) {
         defaultTab = opts.defaultTab;
       } else if (opts.source === "conversations") {
-        defaultTab = "Digest";
+        defaultTab = "Priority";
       } else if (opts.source === "chat") {
         defaultTab = "Ask";
       }

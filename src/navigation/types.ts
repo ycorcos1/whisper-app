@@ -8,7 +8,11 @@ import { NavigatorScreenParams } from "@react-navigation/native";
 export type RootStackParamList = {
   Auth: undefined;
   Home: NavigatorScreenParams<HomeTabsParamList>;
-  Chat: { conversationId: string; conversationName: string; fromNewChat?: boolean };
+  Chat: {
+    conversationId: string;
+    conversationName: string;
+    fromNewChat?: boolean;
+  };
   ChatSettings: { conversationId: string };
   NewChat: undefined;
 };

@@ -82,6 +82,8 @@ export const CasperContextProvider: React.FC<{ children: React.ReactNode }> = ({
     enableLLM: featureFlags.CASPER_ENABLE_LLM,
     enableProactive: featureFlags.CASPER_ENABLE_PROACTIVE,
     indexBatchSize: featureFlags.CASPER_INDEX_BATCH,
+    enableTranslator: featureFlags.CASPER_ENABLE_TRANSLATOR,
+    translatorDefaultLanguage: featureFlags.TRANSLATOR_DEFAULT_LANGUAGE,
   });
 
   const setLoading = useCallback((loading: boolean) => {
