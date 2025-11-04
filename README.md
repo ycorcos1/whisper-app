@@ -1,6 +1,7 @@
 # Whisper
 
 A production-ready mobile messaging app built with React Native (Expo Go) and Firebase.
+Walkthrough Video: https://www.youtube.com/watch?v=0mnUITsEV6M
 
 ## 🤖 Casper AI Agent
 
